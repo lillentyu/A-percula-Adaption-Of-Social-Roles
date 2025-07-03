@@ -1,0 +1,3 @@
+gene_id	target_id
+rhbg	ENSAPEG00000002816
+rhcg	ENSAPEG00000014432

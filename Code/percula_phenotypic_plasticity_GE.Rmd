@@ -393,6 +393,7 @@ summary(results(dds))
 
 
 ```{r create results of DEGs by contrasts}
+load("transformed_counts_mindepth10_run2.RData")
 ## When specifying your contrasts, make sure you 'control' level is the second value input and your 'treatment' is the first
 P1_con_P2 <- results(dds, contrast = c("fish_type2", "P2", "P1"), alpha = 0.05)
 P1_con_S <- results(dds, contrast = c("fish_type2", "S", "P1"), alpha = 0.05)
@@ -477,7 +478,7 @@ DEG_bar_clutches <- data.frame("clutch_ID" = c(toString(unlist(str_split(L2_con_
 
 
 DEG_bar_clutches <- gather(DEG_bar_clutches, reg, genes, up:down)
-DEG_bar_clutches
+#DEG_bar_clutches
 ```
 
 
@@ -519,7 +520,7 @@ Figure: Bar plot of significant DEGs. The y axis denotes how many genes there ar
 ### Paired Venns of DEGs
 
 
-```{r paired Venns, eval=FALSE, include=FALSE}
+```{r paired Venns}
 
 ## Comparing up between all three: up regulation
 venn_loci_up <- list("P1 vs P2" = upCon_P1P2, "P1 vs S" = upCon_P1S, "P2 vs S" = upCon_P2S)
@@ -537,7 +538,8 @@ ven_all_up <- ggvenn(venn_loci_up,
        set_name_color = "#25292B", set_name_size = 2
        )
 ven_all_up
-ggsave( "../Figures/All_PairWise_Vens_UP.png", width = 4, height = 4)
+#ggsave( "../Figures/All_PairWise_Vens_UP.png", width = 4, height = 4)
+
 
 ven_all_down <- ggvenn(venn_loci_down, 
        show_percentage=FALSE,
@@ -549,6 +551,31 @@ ven_all_down
 #ggsave("../Figures/All_PairWise_Vens_DOWN.png", width = 4, height = 4)      
 
 
+
+#read in geneID2geneName tab to match gene names with
+gene_map <- read.delim("./geneID2geneNAME.tab", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+
+#down regulated genes
+shared_genes_down_partial <- intersect(
+  venn_loci_down[["P1 vs P2"]],
+  venn_loci_down[["P1 vs S"]])
+
+shared_genes_down_partial <- data.frame(
+  ensembl_gene_id = shared_genes_down_partial,
+  external_gene_name = gene_map$external_gene_name[match(shared_genes_down_partial, gene_map$ensembl_gene_id)])
+# Save to CSV
+#write.csv(shared_genes_down_partial, "../Data/VENN_shared_genes_down.csv", row.names = FALSE, quote = FALSE)
+
+#up regulated genes
+shared_genes_up_partial <- intersect(
+  venn_loci_up[["P1 vs P2"]],
+  venn_loci_up[["P1 vs S"]])
+
+shared_genes_up_partial <- data.frame(
+  ensembl_gene_id = shared_genes_up_partial,
+  external_gene_name = gene_map$external_gene_name[match(shared_genes_up_partial, gene_map$ensembl_gene_id)])
+# Save to CSV
+#write.csv(shared_genes_up_partial, "../Data/VENN_shared_genes_up.csv", row.names = FALSE, quote = FALSE)
 
 ```
 
@@ -675,4 +702,317 @@ pheatmap(as.matrix(expr_clean),  # Exclude the first four columns (gene names an
 This heatmap shows the expression of genes that are significantly differentially expressed between the three social positions (P1, P2, and S). The rows represent genes, while the columns represent individuals that belong to the 3 different social positions. The color intensity indicates the level of gene expression, with red indicating higher expression and blue indicating lower expression.
 There seem to be subset of DEGs. To further explore these DEGs and link DEGs with observed phenotypes, I will explore this dataset using WGCNA_script.R, which will allow me to identify modules of co-expressed genes and link these modules to phenotypes.
 
+#### Vulcano Plots for Supplementary Materials
 
+```{r vulcano plot - of pairwise comparisons}
+## Load previously saved dds, vsd, and rlog data 
+load("transformed_counts_mindepth10.RData")
+
+#P1 vs S
+res_P1vsS <- results(dds, contrast = c("fish_type2", "P1", "S"))
+res_df_P1vsS <- as.data.frame(res_P1vsS)
+res_df_P1vsS$gene <- rownames(res_df_P1vsS)  # add gene names
+
+# Define thresholds
+log2fc_thresh <- 1
+padj_thresh <- 0.05 
+
+# recode categories - for significance
+res_df_P1vsS$significance <- "NotSig"
+res_df_P1vsS$significance[res_df_P1vsS$padj < padj_thresh &
+                  res_df_P1vsS$log2FoldChange >=  log2fc_thresh] <- "UpinP1"
+res_df_P1vsS$significance[res_df_P1vsS$padj < padj_thresh &
+                  res_df_P1vsS$log2FoldChange <= -log2fc_thresh] <- "UpinS"
+
+# keep a clean ordering (optional)
+res_df_P1vsS$significance <- factor(
+  res_df_P1vsS$significance,
+  levels = c("UpinP1", "UpinS", "NotSig"))
+
+custom_colors <- c(
+  "UpinP1" = "magenta3",       
+  "UpinS" = "gray40",
+  "NotSig" = "black")
+
+res_df_P1vsS$gene <- rownames(res_df_P1vsS)
+
+# Top 10 upregulated in P1 (positive FC)
+top_up_P1 <- res_df_P1vsS %>%
+  filter(log2FoldChange >= log2fc_thresh & padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+# Top 10 upregulated in S (negative FC)
+top_up_S <- res_df_P1vsS %>%
+  filter(log2FoldChange <= -log2fc_thresh & padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+# Combine them into one dataframe
+highlight_genes <- bind_rows(top_up_P1, top_up_S)
+write.csv(highlight_genes, "log2FC_top10genes_P1vsS_2025_06_26.csv", row.names = FALSE)
+
+P1vsS <- ggplot(res_df_P1vsS, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(aes(color = significance), size = 3.5, alpha = 0.7) +
+  scale_color_manual(values = custom_colors) +
+  geom_vline(xintercept = c(-log2fc_thresh, log2fc_thresh), linetype = "dashed", color = "grey80") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey80") +
+  #geom_text_repel(aes(label = gene), size = 3.5, min.segment.length = 0) +
+  labs(x = "Log2FC",
+      y = "-log10 adj.p-value",
+       color = "") +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",  # remove legend if not needed
+    panel.grid = element_blank(),
+     axis.text = element_text(size = 14),      # increase tick label size
+    axis.title = element_text(size = 16),
+    axis.line = element_line(color = "black", linewidth = 0.5),
+    plot.background = element_rect(fill = "white", color = NA))     
+
+
+
+library(plotly)
+library(htmlwidgets)
+
+# Add tooltip info column
+res_df_P1vsS$tooltip <- paste0(
+  "Gene: ", res_df_P1vsS$gene, "\n",
+  "log2FC: ", round(res_df_P1vsS$log2FoldChange, 2), "\n",
+  "-log10(padj): ", round(-log10(res_df_P1vsS$padj), 2)
+)
+
+highlight_genes$tooltip <- paste0(
+  "Gene: ", highlight_genes$gene, "\n",
+  "log2FC: ", round(highlight_genes$log2FoldChange, 2), "\n",
+  "-log10(padj): ", round(-log10(highlight_genes$padj), 2)
+)
+
+# Create ggplot with 'text' aesthetic
+p <- ggplot(res_df_P1vsS, aes(x = log2FoldChange, y = -log10(padj), text = tooltip)) +
+  geom_point(aes(color = significance), size = 2, alpha = 0.7) +
+  geom_point(data = highlight_genes,
+             aes(x = log2FoldChange, y = -log10(padj), text = tooltip),
+             shape = 21, stroke = 1, color = "red", fill = NA, size = 3) +
+  geom_vline(xintercept = c(-log2fc_thresh, log2fc_thresh), linetype = "dashed", color = "grey80") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey80") +
+  labs(x = "Log2FC (P1 vs S)", y = "-log10 adj. p-value", color = "") +
+  scale_color_manual(values = custom_colors) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank()
+  )
+
+# Convert to interactive plot
+P1vsS <- ggplotly(p, tooltip = "text")
+saveWidget(P1vsS, file = "volcano_plot_P1_vs_S.html")
+```
+Positive log2FoldChange → gene is upregulated in P1 relative to S
+
+Negative log2FoldChange → gene is downregulated in P1 relative to S
+→ i.e., upregulated in S
+
+```{r}
+#P1 vs P2
+res_P1vsP2 <- results(dds, contrast = c("fish_type2", "P1", "P2"))
+res_df_P1vsP2 <- as.data.frame(res_P1vsP2)
+res_df_P1vsP2$gene <- rownames(res_df_P1vsP2)  # add gene names
+
+# Define thresholds
+log2fc_thresh <- 1
+padj_thresh <- 0.05 
+
+# recode categories - for significance
+res_df_P1vsP2$significance <- "NotSig"
+res_df_P1vsP2$significance[res_df_P1vsP2$padj < padj_thresh &
+                  res_df_P1vsP2$log2FoldChange >=  log2fc_thresh] <- "UpinP1"
+res_df_P1vsP2$significance[res_df_P1vsP2$padj < padj_thresh &
+                  res_df_P1vsP2$log2FoldChange <= -log2fc_thresh] <- "UpinP2"
+
+# keep a clean ordering (optional)
+res_df_P1vsP2$significance <- factor(
+  res_df_P1vsP2$significance,
+  levels = c("UpinP1", "UpinP2", "NotSig"))
+
+custom_colors2 <- c(
+  "UpinP1" = "magenta3",       
+  "UpinP2" = "purple3",
+  "NotSig" = "black")
+
+res_df_P1vsP2$gene <- rownames(res_df_P1vsP2)
+
+# Top 10 upregulated in P1 (positive FC)
+top_up_P1 <- res_df_P1vsP2 %>%
+  filter(log2FoldChange >= log2fc_thresh & padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+# Top 10 upregulated in P2 (negative FC)
+top_up_P2 <- res_df_P1vsP2 %>%
+  filter(log2FoldChange <= -log2fc_thresh & padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+# Combine them into one dataframe
+highlight_genes <- bind_rows(top_up_P1, top_up_P2)
+write.csv(highlight_genes, "log2FC_top10_genes_P1vsP2_2025_06_26.csv", row.names = FALSE)
+
+P1vsP2 <- ggplot(res_df_P1vsP2, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(aes(color = significance), size = 3.5, alpha = 0.7) +
+  scale_color_manual(values = custom_colors2) +
+  geom_vline(xintercept = c(-log2fc_thresh, log2fc_thresh), linetype = "dashed", color = "grey80") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey80") +
+  #geom_text_repel(aes(label = gene), size = 3.5, min.segment.length = 0) +
+  labs(x = "Log2FC",
+      y = "-log10 adj.p-value",
+       color = "") +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",  # remove legend if not needed
+    panel.grid = element_blank(),
+     axis.text = element_text(size = 14),      # increase tick label size
+    axis.title = element_text(size = 16),
+    axis.line = element_line(color = "black", linewidth = 0.5),
+    plot.background = element_rect(fill = "white", color = NA))     
+
+
+# Add tooltip info column
+res_df_P1vsP2$tooltip <- paste0(
+  "Gene: ", res_df_P1vsP2$gene, "\n",
+  "log2FC: ", round(res_df_P1vsP2$log2FoldChange, 2), "\n",
+  "-log10(padj): ", round(-log10(res_df_P1vsP2$padj), 2)
+)
+
+highlight_genes$tooltip <- paste0(
+  "Gene: ", highlight_genes$gene, "\n",
+  "log2FC: ", round(highlight_genes$log2FoldChange, 2), "\n",
+  "-log10(padj): ", round(-log10(highlight_genes$padj), 2)
+)
+
+# Create ggplot with 'text' aesthetic
+p <- ggplot(res_df_P1vsP2, aes(x = log2FoldChange, y = -log10(padj), text = tooltip)) +
+  geom_point(aes(color = significance), size = 2, alpha = 0.7) +
+  geom_point(data = highlight_genes,
+             aes(x = log2FoldChange, y = -log10(padj), text = tooltip),
+             shape = 21, stroke = 1, color = "red", fill = NA, size = 3) +
+  geom_vline(xintercept = c(-log2fc_thresh, log2fc_thresh), linetype = "dashed", color = "grey80") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey80") +
+  labs(x = "Log2FC (P1 vs P2)", y = "-log10 adj. p-value", color = "") +
+  scale_color_manual(values = custom_colors) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank()
+  )
+
+# Convert to interactive plot
+P1vsP2 <- ggplotly(p, tooltip = "text")
+saveWidget(P1vsP2, file = "volcano_plot_P1_vs_P2.html")
+```
+
+
+```{r}
+#P2 vs S
+res_P2vsS <- results(dds, contrast = c("fish_type2", "P2", "S"))
+res_df_P2vsS <- as.data.frame(res_P2vsS)
+res_df_P2vsS$gene <- rownames(res_df_P2vsS)  # add gene names
+
+# Define thresholds
+log2fc_thresh <- 1
+padj_thresh <- 0.05
+
+# recode categories - for significance
+res_df_P2vsS$significance <- "NotSig"
+res_df_P2vsS$significance[res_df_P2vsS$padj < padj_thresh &
+                  res_df_P2vsS$log2FoldChange >=  log2fc_thresh] <- "UpinP2"
+res_df_P2vsS$significance[res_df_P2vsS$padj < padj_thresh &
+                  res_df_P2vsS$log2FoldChange <= -log2fc_thresh] <- "UpinS"
+
+# keep a clean ordering (optional)
+res_df_P2vsS$significance <- factor(
+  res_df_P2vsS$significance,
+  levels = c("UpinP2", "UpinS", "NotSig"))
+
+custom_colors3 <- c(
+  "UpinP2" = "purple3",       
+  "UpinS" = "gray40",
+  "NotSig" = "black")
+
+res_df_P2vsS$gene <- rownames(res_df_P2vsS)
+
+
+# Top 10 upregulated in P2 (positive FC)
+top_up_P2 <- res_df_P2vsS %>%
+  filter(log2FoldChange >= log2fc_thresh & padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+# Top 10 upregulated in S (negative FC)
+top_up_S <- res_df_P2vsS %>%
+  filter(log2FoldChange <= -log2fc_thresh & padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+# Combine them into one dataframe
+highlight_genes <- bind_rows(top_up_P2, top_up_S)
+write.csv(highlight_genes, "log2FC_top10genes_P2vsS_2025_06_26.csv", row.names = FALSE)
+
+P2vsS <- ggplot(res_df_P2vsS, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point(aes(color = significance), size = 3.5, alpha = 0.7) +
+  scale_color_manual(values = custom_colors3) +
+  geom_vline(xintercept = c(-log2fc_thresh, log2fc_thresh), linetype = "dashed", color = "grey80") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey80") +
+  #geom_text_repel(aes(label = gene), size = 3.5, min.segment.length = 0) +
+  labs(x = "Log2FC",
+      y = "-log10 adj.p-value",
+       color = "") +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",  # remove legend if not needed
+    panel.grid = element_blank(),
+     axis.text = element_text(size = 14),      # increase tick label size
+    axis.title = element_text(size = 16),
+    axis.line = element_line(color = "black", linewidth = 0.5),
+    plot.background = element_rect(fill = "white", color = NA))
+
+# Add tooltip info column
+res_df_P2vsS$tooltip <- paste0(
+  "Gene: ", res_df_P2vsS$gene, "\n",
+  "log2FC: ", round(res_df_P2vsS$log2FoldChange, 2), "\n",
+  "-log10(padj): ", round(-log10(res_df_P2vsS$padj), 2)
+)
+highlight_genes$tooltip <- paste0(
+  "Gene: ", highlight_genes$gene, "\n",
+  "log2FC: ", round(highlight_genes$log2FoldChange, 2), "\n",
+  "-log10(padj): ", round(-log10(highlight_genes$padj), 2)
+)
+# Create ggplot with 'text' aesthetic
+p <- ggplot(res_df_P2vsS, aes(x = log2FoldChange, y = -log10(padj), text = tooltip)) +
+  geom_point(aes(color = significance), size = 2, alpha = 0.7) +
+  geom_point(data = highlight_genes,
+             aes(x = log2FoldChange, y = -log10(padj), text = tooltip),
+             shape = 21, stroke = 1, color = "red", fill = NA, size = 3) +
+  geom_vline(xintercept = c(-log2fc_thresh, log2fc_thresh), linetype = "dashed", color = "grey80") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey80") +
+  labs(x = "Log2FC (P2 vs S)", y = "-log10 adj. p-value", color = "") +
+  scale_color_manual(values = custom_colors) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank()
+  )
+
+P2vsS <- ggplotly(p, tooltip = "text")
+saveWidget(P2vsS, file = "volcano_plot_P2_vs_S.html")
+
+```
+
+
+combine vulcanos - P1vsS, P1vsP2, P2vsS
+
+```{r}
+library(cowplot)
+combined_vulcano <- plot_grid(P1vsP2, P1vsS, P2vsS, ncol = 3, labels = c("A", "B", "C"),
+                              label_size = 16, align = "hv")
+ggsave("combined_vulcano.png", combined_vulcano, width = 9, height = 6, dpi = 300)
+```

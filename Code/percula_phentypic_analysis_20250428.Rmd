@@ -1,0 +1,654 @@
+---
+title: "Growth Analysis - Phenotypic Plasticity at the Initiation of Dominance hierarchies"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "light"
+    downcute_theme: "default"
+    code_folding: hide
+---
+
+<style>
+  h2{color: #DC7633 !important}
+  h1{color: #5499C7 !important}
+  body{background-color: white !important}
+</style>
+
+<style>
+.list-group-item.active, .list-group-item.active:hover, .list-group-item.active:focus {
+    color: #212F3D;
+    background-color: #EDBB99;
+    font-weight: bold;}
+a {
+    color: #5499C7;}
+.nav-tabs > li.active > a, .nav-tabs > li.active > a:hover, .nav-tabs > li.active > a:focus {
+    color: #DC7633;}
+body {
+    font-family: "Open Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 15px;
+    line-height: 1.42857143;
+    color: #212F3D;}
+</style>
+
+
+<br/>
+
+```{r set some defaults, echo = FALSE}
+
+library("knitr")
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+pdf.options(useDingbats = FALSE)
+options(knitr.kable.NA = '')
+
+```
+
+
+```{r load packaged, echo=FALSE}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(multcomp)
+library(tidyr)
+library(lmerTest)
+library(emmeans)
+library(interactions)
+library(kableExtra)
+library(MuMIn)
+```
+
+## Introduction
+This Rmarkdown document contains analysis of growth and size of fish *Amphiprion percula* which were part of a 5 week experiment. Individuals were size-matched and either housed as a pair or as a singleton. A total of 30 replicates containing 30 pairs (n=60) and 30 singletons (n=30) were used in this experiment.
+
+Initial standard lenght (mm) was measured and recorded of all fish, prior to experimental set-up  and used to create size-matched pairs and corresponding size matched singletons. Standard lengths were measured from photos using ImageJ software. At the end of the experiment, all fish were re-measured using exact same methods. Growth of all individual was calculated as 
+$FinalStanardLenghth - InitialStandardLength$.
+
+LmerTest package was used for all general linear mixed model analysis (GLMM).
+
+
+## Inspecting the dataset {.tabset}
+```{r, include = FALSE}
+full_data <- read.csv(file = "../Data/Vizer_StrategicGrowth_R_annotated_SNPcorrected_20250425.csv", header = T)
+head(full_data)
+tail(full_data)
+dim(full_data)
+#all looks good!
+
+table(full_data$fish_type2) #we have PS category (replicates that lost fish - needs to be removed)
+
+subset_data <- subset(full_data, !replicate_ID == "8" & !replicate_ID == "9" & !replicate_ID == "18")
+head(subset_data)
+subset_data$replicate_ID #all good
+table(subset_data$fish_type2) #all good
+```
+
+### List of replicates to use
+```{r}
+print(subset_data$replicate_ID)
+table(subset_data$fish_type2)
+```
+<br/>
+<br/>
+
+
+
+### Mean growth of each fish category
+```{r}
+group_by(subset_data, fish_type2) %>%
+  summarise(
+    count = n(),
+    mean = mean(growth, na.rm = TRUE),
+    sd = sd(growth, na.rm = TRUE))
+```
+
+
+
+---
+
+## Linear-mixed model {.tabset}
+
+We can think about growth over the 5 weeks
+1) Does size of individual affected by fish category over time? <br/>
+
+Hypothesis: Pairs (both P1 and P2) should grow more compared to singleton individuals. <br/>
+Hypothesis: Within pairs, P1 should outgrow P2.
+
+
+### Model I:
+Size over time across three fish categories
+$formula: size$ ~ $time*FishType2 + (1|replicateID)$
+
+** the model reported in the manuscript **
+```{r creating stacked size data, include=FALSE}
+#needing columns: initial_length_avg + final_length_avg + fish_type2 + housing tank + replicate_ID 
+size_data <- subset_data[, c("replicate_ID", "housing_tank_ID", "fish_type2", "initial_length_avg", "final_length_avg")]
+head(size_data)
+dim(size_data)  #81 rows, this needs to double to have it stacked correctly
+
+size_data <- gather(size_data, key = "time", value = "size", 4:5)
+head(size_data)
+dim(size_data)  #162 rows, stacked correctly
+
+size_data$time[size_data$time == "initial_length_avg"] <- "week 0"
+size_data$time[size_data$time == "final_length_avg"] <- "week 5"
+head(size_data)
+
+#time needs to be a factor
+size_data$time <- as.factor(size_data$time)
+```
+
+```{r}
+mixed_mod_size <- lmer(size ~ time*fish_type2 + (1|replicate_ID), data = size_data)
+anova(mixed_mod_size)
+```
+### Post-Hoc comparisons
+```{r}
+emm <- emmeans(mixed_mod_size, ~ time*fish_type2)
+
+emms_tbl <- pairs(emm, simple = "each") %>%
+  rbind() 
+
+emms_tbl%>%
+   kbl(col.names = c("Fish Category", "Time", "Contrast", "Estimate", "SE", "df", "t ratio", "p-value"), caption = "Simultaneous pair-wise post-hoc comaprisons of size of fish categories (P1, P2, S) and time (week 0, week 5).", align = "c", digits = 3) %>%
+  kable_classic(full_width = F, html_font = "Cambria")%>%
+  column_spec(1:3, bold = T) %>%
+  row_spec(0, color = "white", background = "black",bold = T)
+
+```
+
+R-squared values of the best fit model:
+```{r}
+r.squaredGLMM(mixed_mod_size)
+```
+
+```{r}
+cat_plot(mixed_mod_size, pred = time, modx=fish_type2, geom="line", interval=TRUE) 
+```
+
+
+
+
+```{r}
+mixed_mod_size_s <- step(mixed_mod_size,reduce.fixed = FALSE, reduce.random = FALSE)
+plot(mixed_mod_size_s)
+```
+
+*RESULTS:*We can see that time and fish category and the interaction between them are significant predictors of size of an individual. Given the interaction between the 2 explanatory variables are significant, we should not report main effects. 
+
+>For manuscript: GLMM results showed that the interaction between fish category (P1, P2, vs S) and experimental week were significant predictors of size (F-value=10.534 , NumDf=2, DenDf=130, p-value<0.0001). Simultaneous pairwise comparisons using Tukey’s HSD test indicated that there was no statistical significance at week 0 among the three fish categories (Table x), meaning all fish started size matched with no significant difference. On the contrary, simultaneous pairwise comparisons using Tukey’s HSD test indicated significant differences among the three fish categories at the end of the experiment (Table x). All fish grew over the 5 week period (Table x), and P1 grew significantly more compared to P2 and S. P2 and S individuals showed no significant difference in average SL (standard length) at the end of the experiment (Table x).
+
+Type III Analysis of Variance Table with Satterthwaite's method
+                Sum Sq Mean Sq NumDF DenDF F value    Pr(>F)    
+time            334.54  334.54     1   130 159.794 < 2.2e-16 ***
+fish_type2      129.93   64.96     2   130  31.030 9.612e-12 ***
+time:fish_type2  44.11   22.05     2   130  10.534 5.757e-05 ***
+
+### Figures
+```{r summary statistics, include=FALSE}
+size_data_summary <- ddply(size_data, c("time", "fish_type2"),summarise,
+               N    = sum(!is.na(size)),
+               mean = mean(size, na.rm=TRUE),
+               sd   = sd(size, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+size_data_summary
+```
+
+```{r setting up data for figure, include=FALSE}
+head(size_data)
+size_data_summary
+colnames(size_data_summary)[4] = "size"
+```
+
+
+```{r size figure over time, fig.height=7, fig.width=7}
+gg_size <- ggplot(size_data, aes(x=time, y=size,group=fish_type2, colour=fish_type2))+
+        geom_jitter(position = position_jitterdodge(0.8), size=4, alpha=0.25) +
+        geom_line(aes(group=fish_type2), data = size_data_summary,  position=position_dodge(0.8), size=1)+
+        geom_pointrange(aes(ymin = size-se, ymax = size+se), data =size_data_summary, size=1.2, alpha=1, position=position_dodge(0.8))+
+        scale_color_manual(values = c( "magenta3","purple3", "grey50"), name ="social position") +
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = c(0.85,0.9),         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+  scale_x_discrete(labels = c("week 0" = "1", "week 5" = "5")) +
+        ylab("Standard length (mm) + SEM") + ylim(8,25)+
+        xlab("Experimental week")
+gg_size
+
+#ggsave("size-20250428-social-rank.png", height = 7, width = 7, dpi = 1200)
+```
+
+```{r setting up growth figure, include=FALSE}
+growth_summary <- ddply(subset_data, c("fish_type2"),summarise,
+               N    = sum(!is.na(growth)),
+               mean = mean(growth, na.rm=TRUE),
+               sd   = sd(growth, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+growth_summary
+colnames(growth_summary)[3] = "growth"
+```
+
+```{r, fig.align = "center", fig.height=7, fig.width=4}
+gg_growth <- ggplot(subset_data, aes(x=fish_type2, y=growth, colour=fish_type2))+
+        geom_boxplot(width=0.3, fill= c("magenta3","purple3", "grey50"), alpha=0.3, position = position_dodge(0.3))+
+        geom_jitter(size=4, alpha=0.3, position = position_dodge(0.3)) +
+        geom_pointrange(aes(ymin = growth-se, ymax = growth+se), data =growth_summary, size=1.2, position = position_dodge(0.3), alpha=1)+
+        scale_color_manual(values = c("magenta3","purple3", "grey50")) +
+        theme_classic() +
+        theme(axis.text = element_text(size = 24), axis.title = element_text(size = 24), legend.position = "none",         legend.title=element_text(size=24),  legend.text=element_text(size=24))+
+        ylab("Growth (mm/5 weeks)") +
+        xlab("social position")+
+        geom_hline(yintercept=4.33, linetype="dashed", lwd=1.2, color = "magenta3")+
+        geom_hline(yintercept=1.89, linetype="dashed", lwd=1.2, color = "purple3")+
+        geom_hline(yintercept=2.41, linetype="dashed", lwd=1.2, color = "grey50")
+gg_growth
+
+library(cowplot)
+# Combine growth, appetite, and behaviour
+single <- plot_grid(gg_growth,
+                           labels = c("A1"),
+                           ncol = 1)
+
+
+#ggsave("../Figures/growth-20250506.png", height = 7, width = 4, dpi = 1200)
+```
+## Inspecting the dataset {.tabset}
+```{r, include=FALSE}
+beh_data <- read.csv(file = "../Data/Strategic_Growth_Behavioural_DATA_20230202.csv", header = T)
+head(beh_data)
+str(beh_data)
+dim(beh_data)
+#many columns - must extract columns of interest
+#extracting columns of interest:
+#replicate_ID; housing_tank_ID; experiment_day; week; fish_type; abs_diff_appetite; average_appetite; total_appetite; P_max_appetite; P_min_appetite; S_appetite
+
+beh_data <- beh_data[, c("replicate_ID", "housing_tank_ID", "experiment_day", "exp_week", "fish_type",  "abs_diff_appetite", "average_appetite", "total_appetite", "P_max_appetite", "P_min_appetite", "S_appetite")]
+head(beh_data)
+
+beh_data$abs_diff_appetite <- as.numeric(beh_data$abs_diff_appetite)
+beh_data$average_appetite <- as.numeric(beh_data$average_appetite)
+head(beh_data) #have columns of interest
+
+#needing to remove 3 replicates which lost fish during the experiment
+beh_data <- subset(beh_data, !replicate_ID == "8" & !replicate_ID == "9" & !replicate_ID == "18")
+```
+
+### List of replicates to use
+```{r}
+dim(beh_data)
+print(beh_data$replicate_ID)
+print(table(beh_data$fish_type))
+```
+<br/>
+
+Appetite can be analysed in two different manners: <br/>
+- Having pairs combined: Comparison of per capita appetite between pairs vs singleton <br/>
+- Having pairs separated out: Comparison across three individuals <br/>
+  - P-max (the individual within the pair that ate more)
+  - P-min (the individual within the pair that ate less)
+  - S (singleton)
+
+Hypothesis: We would expect to see pairs eat more compared to singletons as they attempt to out compete each other. <br/>
+Within pairs, we would expect 1 individual to eat more compared to its tank mate. 
+Analysing across 3 fish types
+
+---
+
+## Pairs separated out {.tabset}
+Previously we had a per capita appetite for both pairs combined, however, this is not the most informative when wanting to understand how is appetite driven within pairs. **Does one individual within the pair account for all that increase we see compared to singleton?**
+
+Given we cannot tell individuals apart in the pairs, we must assign P-max and P-min, to any given individual within the pair at any given time. Whoever took more bites within the pair will be denoted as P-max and whoever ate less denoted as P-min for any given observation. We can only assume that whoever ate more at week one would be eating more throughout the experiment, however, there is no way to double-check this. But doing this will allow us to compare appetite across all fish categories, making a distinction amongst pairs.
+
+needing to create a dataset for number of bites: 
+- P_max & P_min in pairs and S for singleton
+- needing columns: rep ID, housing_tank_ID, exp_week, fish_type, P_max_appetite, P_min_appetite, S_appetite
+
+
+```{r preparing dataset, include=FALSE}
+head(beh_data)
+
+beh_data_app <- beh_data[, c("replicate_ID", "housing_tank_ID", "exp_week", "fish_type", "P_max_appetite", "P_min_appetite", "S_appetite")]
+head(beh_data_app)
+dim(beh_data_app)    #235   rows, I`ll need three times of this
+
+beh_data_app <- gather(beh_data_app, key =  "appetite_type", value = "number_of_bites", 5:7)
+head(beh_data_app)
+dim(beh_data_app)   #705  rows
+```
+### Mean number of bites of P-max, P-min, S 
+```{r, include=FALSE}
+# ddply provides the standard deviation, standard error of the mean, and a (default 95%) confidence interval
+beh_app_summary <- ddply(beh_data_app, c("exp_week", "appetite_type"),summarise,
+               N    = sum(!is.na(number_of_bites)),
+               mean = mean(number_of_bites, na.rm=TRUE),
+               sd   = sd(number_of_bites, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+beh_app_summary
+```
+
+```{r}
+#there is a NaN again, needs fixing
+beh_app_summary$N[beh_app_summary$N == 0] <- NA
+beh_app_summary$mean[beh_app_summary$mean == "NaN"] <- NA
+
+knitr::kable(beh_app_summary, caption = "Summary Statistics of Appetite", align = "c")
+
+#appetite_type as factor:
+beh_data_app$appetite_type <- as.factor(beh_data_app$appetite_type)
+```
+
+```{r}
+ggplot(beh_app_summary%>% filter(!is.na(mean)), aes(x=exp_week ,y=mean, colour = appetite_type)) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.1) + geom_line(aes(group=appetite_type)) + geom_point() +   theme(legend.position="right") + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) 
+```
+
+This figure suggest that both individual within the pair eats more at the beginning of the experiment compared to the singletons. Let`s look at linear-mixed models.
+
+### Linear Mixed Model II
+$formula: NumberOfBites$ ~ $AppetiteType*ExpWeek + (1|replicateID)$
+```{r}
+mixed_mod_minmax_app <- lmer(number_of_bites~exp_week*appetite_type + (1|replicate_ID), data = beh_data_app)
+anova(mixed_mod_minmax_app)
+```
+
+*RESULTS*: We can see that time and fish category and the interaction between them are significant predictors of appetite of an individual. Given the interaction between the 2 explanatory variables are significant, we should not report main effects. 
+
+
+### Post-Hoc Contrasts 
+```{r}
+emm_mix_mod_minmax_app <- emmeans(mixed_mod_minmax_app, ~exp_week*appetite_type)
+pairs(emm_mix_mod_minmax_app, simple = "each")
+
+emms_minmax_tbl <- pairs(emm_mix_mod_minmax_app, simple = "each") %>%
+  rbind() 
+
+emms_minmax_tbl%>%
+   kbl(col.names = c("Fish Category", "Time", "Contrast", "Estimate", "SE", "df", "t ratio", "p-value"), caption = "Simultaneous pair-wise post-hoc comaprisons for appetite of fish categories (P-max, P-min, S) and time (week 1 to 5).", align = "c", digits = 3) %>%
+  kable_classic(full_width = F, html_font = "Cambria")%>%
+  column_spec(1:3, bold = T) %>%
+  row_spec(0, color = "white", background = "black",bold = T)
+```
+>For manuscript: GLMM results showed that the interaction between fish type (P-max vs P-min vs S) and experimental week were significant predictors of appetite (F-value=2.2745, NumDf=7, DenDf=275.01, p-value=0.02885). Simultaneous pairwise post-hoc comparisons using Tukey’s HSD test showed significant difference between P-max and P-min as well as P-max and S appetite thoughout all 5 weeks (Table x). On the other hand, significant difference in appetite between P-min and S was significantly different only until week 3, and showed no statistical difference on week 4 and 5 (Table x). Within P-max, post-hoc pairwise comparison was significantly difference when comparing week 1 to weeks 2, 4, and 5 and when comparing week 3 to weeks 4 and 5 (Table x). Same results were found for P-min as well, while S showed no significant difference in appetite across the 5 weeks.
+
+R-squared values of the best fit model:
+```{r}
+r.squaredGLMM(mixed_mod_minmax_app)
+```
+
+```{r}
+cat_plot(mixed_mod_minmax_app, pred = exp_week, modx=appetite_type, geom = "line", interval=TRUE)
+```
+
+
+```{r}
+mixed_mod_average_app_s <- step(mixed_mod_average_app,reduce.fixed = FALSE, reduce.random = FALSE)
+mixed_mod_average_app_s
+```
+
+### Figures
+```{r, fig.height=7, fig.width=7}
+head(beh_app_summary)
+colnames(beh_app_summary)[4] = "number_of_bites"
+
+gg_min_max_appetite <- ggplot(beh_data_app, aes(x=exp_week, y=number_of_bites, group=appetite_type, colour=appetite_type))+
+        geom_jitter(position = position_jitterdodge(0.2), size=4, alpha=0.25) +
+        geom_line(aes(group=appetite_type), data = beh_app_summary,  position=position_dodge(0.7), size=1)+
+        geom_pointrange(aes(ymin = number_of_bites-se, ymax = number_of_bites+se), data =beh_app_summary, size=1.2, alpha=1, position=position_dodge(0.7))+
+        scale_color_manual(values = c( "magenta3","purple3", "grey50"), name ="social position", labels=c("P max", "P min", "S")) +
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = c(0.85,0.9),         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        ylab("Appetite (number of bites) + SEM") +
+        xlab("Experimental week")
+
+gg_min_max_appetite
+
+#ggsave("../Figures/min_max_appetite-20250428-social-rank.png", height = 7, width = 7, dpi = 1200)
+```
+
+
+## Inspecting the dataset {.tabset}
+```{r, include=FALSE}
+beh_data <- read.csv(file = "../Data/Strategic_Growth_Behavioural_DATA_20230202.csv", header = T)
+head(beh_data)
+str(beh_data)
+dim(beh_data)
+#many columns - must extract columns of interest
+#extracting columns of interest:
+#"replicate_ID", "housing_tank_ID", "experiment_day", "exp_week", "fish_type", "total_aggresion", "total_submission"
+
+beh_pairs <- beh_data[, c("replicate_ID", "housing_tank_ID", "experiment_day", "exp_week", "fish_type", "total_aggresion", "total_submission")]
+head(beh_pairs)
+
+
+head(beh_pairs) #have columns of interest
+
+#needing to remove 3 replicates which lost fish during the experiment
+beh_pairs <- subset(beh_pairs, !replicate_ID == "8" & !replicate_ID == "9" & !replicate_ID == "18")
+
+#this dataset has NA inputted for submission and aggression for singletons, we need to remove these so we`re only left with pairs
+table(beh_pairs$fish_type)
+
+beh_pairs <- subset(beh_pairs, fish_type == "P")
+table(beh_pairs$fish_type) #great now we only have the pairs
+```
+### List of replicates to use
+```{r}
+dim(beh_pairs)
+print(beh_pairs$replicate_ID)
+print(table(beh_pairs$fish_type))
+```
+<br/>
+
+Behaviour can be analysed as: <br/>
+- aggression over time <br/>
+- submission over time <br/>
+
+Hypothesis: Over-time aggression and submission will decline as size difference emerges within pairs.
+
+### Summary Statistics
+```{r}
+# ddply provides the standard deviation, standard error of the mean, and a (default 95%) confidence interval
+agg_summary <- ddply(beh_pairs, c("exp_week"),summarise,
+               N    = sum(!is.na(total_aggresion)),
+               mean = mean(total_aggresion, na.rm=TRUE),
+               sd   = sd(total_aggresion, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+
+knitr::kable(agg_summary, caption = "Summary Statistics of Total Aggression", align = "c")
+
+sub_summary <- ddply(beh_pairs, c("exp_week"),summarise,
+               N    = sum(!is.na(total_submission)),
+               mean = mean(total_submission, na.rm=TRUE),
+               sd   = sd(total_submission, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+
+knitr::kable(sub_summary, caption = "Summary Statistics of Total Submission", align = "c")
+```
+
+```{r, include=FALSE}
+beh_pairs_totaggsub <- gather(beh_pairs, key = "behaviour_type", value = "count", 6:7 )
+head(beh_pairs_totaggsub)
+
+#getting summary results of stacked data:
+pair_summary_totaggsub <- ddply(beh_pairs_totaggsub, c("behaviour_type", "exp_week"),summarise,
+               N    = sum(!is.na(count)),
+               mean = mean(count, na.rm=TRUE),
+               sd   = sd(count, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+pair_summary_totaggsub
+```
+
+```{r}
+ggplot(pair_summary_totaggsub%>% filter(!is.na(mean)), aes(x=exp_week ,y=mean, colour = behaviour_type)) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.1) +
+    geom_line(aes(group=behaviour_type)) + geom_point(size=3) +   theme(legend.position="right") + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"),axis.text = element_text(size = 25), axis.title = element_text(size = 20), legend.position = c(0.8,0.9), legend.title=element_text(size=18),  legend.text=element_text(size=18), legend.key = element_rect("white")) + xlab("experimental week") + ylab("total aggression/submission mean") + scale_color_manual(values = c("purple3", "plum3"), name="behaviour type", labels=c("aggression", "submission")) + ylim(0,10) 
+```
+
+Looking at this, both aggression and submission seem to decline over time. Let`s test this with a LMM.
+
+---
+
+## Aggression {.tabset}
+$formula: TotalAggression$ ~ $time + (1|HousingTankID)$
+```{r, include=FALSE}
+str(beh_pairs)
+
+#exp_week to factor:
+beh_pairs$exp_week <- as.factor(beh_pairs$exp_week)
+
+```
+
+### Linear Mixed Model
+```{r}
+mixed_mod_agg <- lmer(total_aggresion ~ exp_week + (1|housing_tank_ID), data = beh_pairs)
+anova(mixed_mod_agg)
+```
+*RESULTS*: We can see that time is a significant predictors of aggression within pairs. We are interested with pair-wise comparisons different, so we follow up with a Post-hoc Tukey analysis.
+
+```{r}
+post.hoc_agg <- glht(mixed_mod_agg, linfct = mcp(exp_week = 'Tukey'))
+summary(post.hoc_agg)
+```
+
+R-squared values of the best fit model:
+```{r}
+r.squaredGLMM(mixed_mod_agg)
+```
+```{r}
+emm_mix_mod_agg <- emmeans(mixed_mod_agg, ~exp_week)
+pairs(emm_mix_mod_agg, simple = "each")
+```
+
+>For manuscript: GLMM results showed experimental week was significant predictors of total aggression (F-value=8.9786, NumDf=4, DenDf=94.795, p-value<0.001). Tukey post-hoc comparison showed that weeks 1, 2, and 3 were significantly different from week 5.
+
+
+### Figure
+```{r, include=FALSE}
+beh_pairs_totaggression <- beh_pairs_totaggsub[beh_pairs_totaggsub$behaviour_type == "total_aggresion", ]
+beh_pairs_totaggression
+beh_pair_totalagg_summary<- ddply(beh_pairs_totaggression, c("exp_week"),summarise,
+               N    = sum(!is.na(count)),
+               mean = mean(count, na.rm=TRUE),
+               sd   = sd(count, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+beh_pair_totalagg_summary
+
+colnames(beh_pair_totalagg_summary)[3] = "count"
+```
+
+```{r, fig.height=7, fig.width=7}
+gg_aggression <- ggplot(beh_pairs_totaggression, aes(x=exp_week, y=count))+
+        geom_jitter(size=4, alpha=0.3, width = 0.3, colour= "violetred3") +
+        geom_line(group=1, data = beh_pair_totalagg_summary, size=1, colour= "maroon3")+
+        geom_pointrange(aes(ymin = count-se, ymax = count+se), data =beh_pair_totalagg_summary, size=1.2, alpha=1, colour= "maroon3")+
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = c(0.9,0.9),         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        ylab("Number of aggressive encounters + SEM") +
+        xlab("Experimental week")
+gg_aggression
+
+#ggsave("total_aggression.png", height = 7, width = 7, dpi = 1200)
+```
+
+
+---
+
+## Submission {.tabset}
+$formula: TotalSubmission$ ~ $time + (1|HousingTankID)$
+
+### Linear Mixed Model
+```{r}
+mixed_mod_sub <- lmer(total_submission ~ exp_week + (1|housing_tank_ID), data = beh_pairs)
+anova(mixed_mod_sub)
+```
+
+
+*RESULTS*: We can see that time is a significant predictors of submission within pairs. We are interested with pair-wise comparisons different, so we follow up with a Post-hoc Tukey analysis.
+
+```{r}
+post.hoc_sub <- glht(mixed_mod_sub, linfct = mcp(exp_week = 'Tukey'))
+summary(post.hoc_sub)
+```
+
+>For manuscript: GLMM results showed experimental week was significant predictor of total submission (F-value=18.055 , NumDf=4, DenDf=94.791 , p-value<0.001). Tukey post-hoc comparison showed that weeks 1, 2, and 3 were significantly different from weeks 4 and 5. 
+
+```{r}
+emm_mix_mod_sub <- emmeans(mixed_mod_sub, ~exp_week)
+pairs(emm_mix_mod_sub, simple = "each")
+```
+
+R-squared values of the best fit model:
+```{r}
+r.squaredGLMM(mixed_mod_sub)
+```
+
+### Figure
+```{r, include=FALSE}
+beh_pairs_totaggsub
+beh_pairs_totsubmission <- beh_pairs_totaggsub[beh_pairs_totaggsub$behaviour_type == "total_submission", ]
+beh_pairs_totsubmission
+
+beh_pair_totalsub_summary<- ddply(beh_pairs_totsubmission, c("exp_week"),summarise,
+               N    = sum(!is.na(count)),
+               mean = mean(count, na.rm=TRUE),
+               sd   = sd(count, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+beh_pair_totalsub_summary
+
+colnames(beh_pair_totalsub_summary)[3] = "count"
+
+```
+
+```{r, fig.height=7, fig.width=7}
+gg_submission <- ggplot(beh_pairs_totsubmission, aes(x=exp_week, y=count))+
+        geom_jitter(size=4, alpha=0.3, width = 0.3, colour= "violetred3") +
+        geom_line(group=1, data = beh_pair_totalsub_summary, size=1, colour= "maroon3")+
+        geom_pointrange(aes(ymin = count-se, ymax = count+se), data =beh_pair_totalsub_summary, size=1.2, alpha=1, colour= "maroon3")+
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = c(0.9,0.9),         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        ylab("Number of submissive encounters + SEM") +
+        xlab("Experimental week")
+gg_submission
+
+#ggsave("total_submission.png", height = 7, width = 7, dpi = 1200)
+```
+## Combined Figure {.tabset}
+```{r, include=FALSE}
+head(beh_pairs)
+head(pair_summary_totaggsub)
+
+comb_beh_data <- gather(beh_pairs, key = "behaviour_type", value = "count", 6:7)
+head(comb_beh_data)
+colnames(pair_summary_totaggsub)[4] = "count"
+```
+
+```{r}
+gg_comb_beh <- ggplot(comb_beh_data, aes(x=exp_week, y=count, group=behaviour_type, colour=behaviour_type))+
+        geom_jitter(position = position_jitterdodge(0.3), size=4, alpha=0.3) +
+        geom_line(aes(group=behaviour_type), data = pair_summary_totaggsub,  position=position_dodge(0.8), size=1)+
+        geom_pointrange(aes(ymin = count-se, ymax = count+se), data =pair_summary_totaggsub, size=1.2, lwd=1.3, alpha=1,  position=position_dodge(0.8))+
+        scale_color_manual(values = c( "darkorange", "grey50"), name ="behaviour", labels=c("Aggression", "Submission")) +
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = c(0.85,0.9),         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        ylab("Total aggression/submission + SEM") +
+        xlab("Experimental week")
+
+gg_comb_beh
+
+
+#ggsave("../Figures/combined_behaviour.png", height = 7, width = 7, dpi = 1200)
+```
+
+
+
+```{r}
+## combining all 3 plots for publication
+library(cowplot)
+# Combine growth, appetite, and behaviour
+combined_plot <- plot_grid(gg_size, gg_min_max_appetite, gg_comb_beh,  ##2 of these plots made in other 2 markdowns
+                           labels = c("A", "B", "C"),
+                           ncol = 1, nrow = 3, align = "v",  
+                           rel_heights = c(1, 1, 1))
+
+print(combined_plot)
+
+#ggsave("../Figures/combined-phenotypic-fig-20250506-social-position.png", combined_plot,   height = 21, width = 6, dpi = 1200)  # Height scaled up (7 × 3)
+
+```
+
