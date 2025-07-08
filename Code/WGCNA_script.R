@@ -10,7 +10,7 @@ library(tidyverse)
 
 
 # Load dds object from previous DESeq2 analyses
-load("./transformed_counts_mindepth10_run2.RData") #using transformed counts
+load("../Data/transformed_counts_mindepth10_run2.RData") #using transformed counts
 
 # Variance stabilizing transformation, it's important to make sure blind = TRUE 
 vst = vst(dds, blind = TRUE)
@@ -46,7 +46,7 @@ gsg = goodSamplesGenes(input)
 gsg$allOK #TRUE
 
 # read in trait spreadsheet
-traits = read.csv("expDesign.csv", sep = ",", row.names = 1)
+traits = read.csv("../Data/expDesign.csv", sep = ",", row.names = 1)
 
 # cluster samples
 sampleTree = hclust(dist(input), method = "average")
@@ -268,7 +268,7 @@ labeledHeatmap(Matrix = moduleTraitCor,
 #saving all data I need as input for creating heatmaps
 save(input, moduleTraitCor,moduleTraitPvalue, moduleColors, MEs, subset_traits, vst, file = "wgcnaMods_fin.RData")
 
-load("wgcnaMods_fin.RData")
+load("./wgcnaMods_fin.RData")
 
 ##using some of JK-s code to create WGCNA figure:
 mod_df <- data.frame(module = row.names(moduleTraitCor), moduleTraitCor) %>% 
@@ -379,7 +379,7 @@ library(cowplot)
 # Combine heatmap and barplot side by side
 combined_plot <- plot_grid(heatmap_nogreen, barplot_nogreen, ncol = 2, align = "h", rel_widths = c(3, 1.3))
 combined_plot
-ggsave(file = "combined_WGCNA_barplot_no_colour.pdf", height = 5.8, width = 14, units = "in", dpi = 1200)
+ggsave(file = "../Figures/combined_WGCNA_barplot_no_colour.pdf", height = 5.8, width = 14, units = "in", dpi = 1200)
 
 #wgcna mod/trait plots and files
 ## A couple things to do before running functions
@@ -535,7 +535,7 @@ black
 library(cowplot)
 combined_plot <- plot_grid(brown, blue, red, black, ncol = 4, align = "h", rel_widths = c(1, 1))
 combined_plot
-
+ggsave(file = "../Figures/WGCNA_modules_boxplots.pdf", height = 5, width = 12, units = "in", dpi = 1200)
 
 #knowing the identified modules of interest, I will proceed to run GO-MWU analysis on them
 #to do this I`ll extract module information for GO-MWU
@@ -618,7 +618,7 @@ geneID2Name["GeneName"][geneID2Name["GeneName"] == ''] <- NA
 
 
 #genes2Go terms
-gene2go <- read.table("geneID2GO.tab", header = T)
+gene2go <- read.table("./DgeneID2GO.tab", header = T)
 head(gene2go)
 
 rldpvals_df <- as.data.frame(rldpvals)
@@ -638,7 +638,7 @@ head(rldpvals_df) #rld in the right format
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~brown module~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # pulling out GO terms of interest from brown module BP and MF - mostly GO terms associated with growth and development
-brownmodBP <- read.table("MWU_BP_brown_moduleInput.csv")
+brownmodBP <- read.table("./GO_MWU/MWU_BP_brown_moduleInput.csv")
 
 #adjust so first row is the header and remove first row
 colnames(brownmodBP) <- brownmodBP[1,]
@@ -680,7 +680,7 @@ head(brown_BP_growthdev_anno)
 dim(brown_BP_growthdev_anno) #annotated set of genes: 216
 #write.csv(brown_BP_growthdev_anno, file.path("./pulledGOterms/brown_BP_growthdevelopment_anno.csv"), row.names = F)
 
-brownmodMF <- read.table("MWU_MF_brown_moduleInput.csv")
+brownmodMF <- read.table("./GO_MWU/MWU_MF_brown_moduleInput.csv")
 #adjust so first row is the header and remove first row
 colnames(brownmodMF) <- brownmodMF[1,]
 brownmodMF <- brownmodMF[-1,]
@@ -707,7 +707,7 @@ nrow(brown_MF_growth)  #full set of genes = 413
 brown_MF_growth_anno<-subset(brown_MF_growth, (!is.na(brown_MF_growth$GeneName)))
 head(brown_MF_growth_anno)
 dim(brown_MF_growth_anno) #annotated set of genes: 275
-#write.csv(brown_MF_growth_anno, file.path("./pulledGOterms/brown_BP_growthdevelopment_anno.csv"), row.names = F)
+#write.csv(brown_MF_growth_anno, file.path("./GO_MWU/pulledGOterms/brown_BP_growthdevelopment_anno.csv"), row.names = F)
 
 ### combine the two datasets for heatmap
 
@@ -723,12 +723,12 @@ merged_brown_growth <- anti_join(brown_mod_growth_BP, brown_mod_growth_MF, by = 
 dim(merged_brown_growth) #annotated set of genes: 410
 
 # Save the merged dataset
-#write.csv(merged_brown_growth, "./pulledGOterms/mergedbrown_growth_dataset.csv", row.names = FALSE)
+#write.csv(merged_brown_growth, "./GO_MWU/pulledGOterms/mergedbrown_growth_dataset.csv", row.names = FALSE)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~blue module~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # pulling out GO terms of interest from blue module BP and MF - mostly GO terms associated with stimulus and behavior
-bluemodBP <- read.table("MWU_BP_blue_moduleInput.csv")
+bluemodBP <- read.table("./GO_MWU/MWU_BP_blue_moduleInput.csv")
 
 #adjust so first row is the header and remove first row
 colnames(bluemodBP) <- bluemodBP[1,]
@@ -762,7 +762,7 @@ nrow(blue_BP_stimulus)  #full set of genes = 99
 blue_BP_stimulus_anno<-subset(blue_BP_stimulus, (!is.na(blue_BP_stimulus$GeneName)))
 head(blue_BP_stimulus_anno)
 dim(blue_BP_stimulus_anno) #annotated set of genes: 85
-#write.csv(blue_BP_stimulus_anno, file.path("./pulledGOterms/blue_BP_stimulus_anno.csv"), row.names = F)
+#write.csv(blue_BP_stimulus_anno, file.path("./GO_MWU/pulledGOterms/blue_BP_stimulus_anno.csv"), row.names = F)
 
 #go terms associated with behavior
 # locomotory behavior - 	 GO:0007626
@@ -783,10 +783,10 @@ nrow(blue_BP_behavior)  #full set of genes = 37
 blue_BP_behavior_anno<-subset(blue_BP_behavior, (!is.na(blue_BP_behavior$GeneName)))
 head(blue_BP_behavior_anno)
 dim(blue_BP_behavior_anno) #annotated set of genes: 35
-#write.csv(blue_BP_behavior_anno, file.path("./pulledGOterms/blue_BP_behavior_anno.csv"), row.names = F)
+#write.csv(blue_BP_behavior_anno, file.path("./GO_MWU/pulledGOterms/blue_BP_behavior_anno.csv"), row.names = F)
 
 
-bluemodMF <- read.table("MWU_MF_blue_moduleInput.csv")
+bluemodMF <- read.table("./GO_MWU/MWU_MF_blue_moduleInput.csv")
 #adjust so first row is the header and remove first row
 colnames(bluemodMF) <- bluemodMF[1,]
 bluemodMF <- bluemodMF[-1,]
@@ -811,7 +811,7 @@ nrow(blue_MF_receptor)  #full set of genes = 119
 blue_MF_receptor_anno<-subset(blue_MF_receptor, (!is.na(blue_MF_receptor$GeneName)))
 head(blue_MF_receptor_anno)
 dim(blue_MF_receptor_anno) #annotated set of genes: 88
-#write.csv(blue_MF_receptor_anno, file.path("./pulledGOterms/blue_MF_receptor_anno.csv"), row.names = F)
+#write.csv(blue_MF_receptor_anno, file.path("./GO_MWU/pulledGOterms/blue_MF_receptor_anno.csv"), row.names = F)
 
 
 
@@ -1168,6 +1168,95 @@ ht <- ComplexHeatmap::pheatmap(merged_brown_growth,
 # draw heatmap, merge legends, and increase font size for legends
 draw(ht,
      merge_legend = TRUE)
+
+########################################################################################
+######################## making bubble plots of pulled GO terms ########################
+
+#Create bubble plots for GO terms which are significant in the brown module
+
+# pulling out GO terms of interest from brown module BP and MF - mostly GO terms associated with growth and development
+brownmodBP <- read.table("./GO_MWU/MWU_BP_brown_moduleInput.csv", header = T)
+
+##GO terms of interest: 
+# striated muscle cell development - GO:0048741;GO:0014904;GO:0048747;GO:0055002
+# muscle cell development - GO:0055001
+# skeletal system development - GO:0001501
+# dorsal/ventral pattern formation - GO:0009953
+# ossification - 	GO:0001503
+# cartilage development - GO:0051216
+# cartilage morphogenesis - 	GO:0060536
+# animal organ morphogenesis - GO:0009887
+# tissue morphogenesis - GO:0002009;GO:0048729
+# tissue development -GO:0009888
+# skeletal muscle tissue development - 	GO:0007519
+# muscle tissue development - 	 GO:0014706;GO:0060537
+# muscle structure development - GO:0061061
+# muscle organ development - 	GO:0007517
+# muscle tissue morphogenesis - 	GO:0055008;GO:0060415
+
+# Store your GO terms as a pattern
+go_terms_BP <- paste0(
+  "GO:0048741|GO:0014904|GO:0048747|GO:0055002|GO:0055001|GO:0001501|GO:0009953|GO:0001503|GO:0051216|GO:0060536|GO:0009887|GO:0002009|GO:0048729|GO:0009888|GO:0007519|GO:0014706|GO:0060537|GO:0061061|GO:0007517|GO:0055008|GO:0060415")
+
+# Filter rows that contain at least one of those GO terms
+filtered_brownmodBP <- brownmodBP %>%
+  filter(grepl(go_terms_BP, term))
+head(filtered_brownmodBP)
+nrow(filtered_brownmodBP) # 15
+
+brownmodMF <- read.table("./GO_MWU/MWU_MF_brown_moduleInput.csv", header = T)
+head(brownmodMF)
+
+##GO terms of interest: 
+# growth factor activity GO:0008083
+# growth factor activity GO:0008083
+# actin binding GO:0003779
+# actin filament binding	GO:0051015
+
+# Store your GO terms as a pattern
+go_terms_MF <- paste0(
+  "GO:0008083|GO:0003779|GO:0051015")
+
+# Filter rows that contain at least one of those GO terms
+filtered_brownmodMF <- brownmodMF %>%
+  filter(grepl(go_terms_MF, term))
+head(filtered_brownmodMF)
+nrow(filtered_brownmodMF) # 3
+
+# Add ontology labels before merging
+filtered_brownmodBP$category <- "Biological Process"
+filtered_brownmodMF$category <- "Molecular Function"
+
+# Combine the filtered data
+merged_brownmod <- rbind(filtered_brownmodBP, filtered_brownmodMF)
+head(merged_brownmod)
+
+# Prepare data: reorder GO terms by significance for cleaner y-axis
+bubble_data <- merged_brownmod %>%
+  arrange(p.adj) %>%
+  mutate(name = factor(name, levels = rev(unique(name))))
+
+# Plot
+ggplot(bubble_data, aes(x = -log10(p.adj), y = name, size = nseqs, color = category)) +
+  geom_point(alpha = 0.8) +
+  scale_size(range = c(2, 15),
+             breaks = c(10, 20, 50, 100, 200),
+             name = "Gene Count") +
+  scale_color_manual(values = c(
+      "Biological Process" = "brown",
+      "Molecular Function" = "lightblue")) +
+  labs(
+    x = expression(-log[10]~"(adjusted p-value)"),
+    y = "GO Term",
+    color = "Ontology"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.y = element_text(size = 14),
+        legend.title = element_text(size = 14),  # Increase legend title size
+        legend.text = element_text(size = 14))    # Increase legend label size)
+
+ggsave("../Figures/brown_module_GO_terms_bubble_plot.png", 
+       width = 12, height = 8, dpi = 1200, bg="white")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 ### Running above code to generate figures one by one - so I can combine them via cowplot

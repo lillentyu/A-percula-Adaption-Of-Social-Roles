@@ -1,5 +1,5 @@
 ---
-title: "Growth Analysis - Phenotypic Plasticity at the Initiation of Dominance hierarchies"
+title: "Growth, Food Intake, Behavior Analysis - Phenotypic Plasticity at the Initiation of Dominance hierarchies"
 date: "`r Sys.Date()`"
 output:
   rmdformats::downcute:
@@ -57,16 +57,17 @@ library(kableExtra)
 library(MuMIn)
 ```
 
-## Introduction
-This Rmarkdown document contains analysis of growth and size of fish *Amphiprion percula* which were part of a 5 week experiment. Individuals were size-matched and either housed as a pair or as a singleton. A total of 30 replicates containing 30 pairs (n=60) and 30 singletons (n=30) were used in this experiment.
+## Growth Data {.tabset}
 
-Initial standard lenght (mm) was measured and recorded of all fish, prior to experimental set-up  and used to create size-matched pairs and corresponding size matched singletons. Standard lengths were measured from photos using ImageJ software. At the end of the experiment, all fish were re-measured using exact same methods. Growth of all individual was calculated as 
+## Introduction
+Below is the analysis of growth and size of fish *Amphiprion percula* which were part of a 5 week experiment. Individuals were size-matched and either housed as a pair or as a singleton. A total of 30 replicates containing 30 pairs (n=60) and 30 singletons (n=30) were used in this experiment. Initial standard lenght (mm) was measured and recorded of all fish, prior to experimental set-up  and used to create size-matched pairs and corresponding size matched singletons. Standard lengths were measured from photos using ImageJ software. At the end of the experiment, all fish were re-measured using exact same methods. Growth of all individual was calculated as 
 $FinalStanardLenghth - InitialStandardLength$.
+
 
 LmerTest package was used for all general linear mixed model analysis (GLMM).
 
 
-## Inspecting the dataset {.tabset}
+## Inspecting the dataset
 ```{r, include = FALSE}
 full_data <- read.csv(file = "../Data/Vizer_StrategicGrowth_R_annotated_SNPcorrected_20250425.csv", header = T)
 head(full_data)
@@ -250,7 +251,15 @@ single <- plot_grid(gg_growth,
 
 #ggsave("../Figures/growth-20250506.png", height = 7, width = 4, dpi = 1200)
 ```
-## Inspecting the dataset {.tabset}
+## Food intake {.tabset}
+
+Below is the analysis of appetite of fish *Amphiprion percula* which were part of a 5 week experiment. Individuals were size-matched and either housed as a pair or as a singleton. A total of 30 replicates containing 30 pairs (n=60) and 30 singletons (n=30) were used in this experiment.
+
+All data were obtained from video recordings of 5 minutes length. Pairs were separated with a divider, prior to feeding to avoid any unequal food intake due to bullying. Dividers were placed in singleton tanks as a sham control. From first bite taken, total number of bites over 5 minutes were recorded weekly for all individuals. There were no videos made of singletons during week 1. It was not possible to tell pairs apart, therefore, within pairs appetite was recorded for left and right fish.
+
+LmerTest package was used for all general linear mixed model analysis (GLMM).
+
+### Inspecting the dataset
 ```{r, include=FALSE}
 beh_data <- read.csv(file = "../Data/Strategic_Growth_Behavioural_DATA_20230202.csv", header = T)
 head(beh_data)
@@ -394,7 +403,7 @@ gg_min_max_appetite <- ggplot(beh_data_app, aes(x=exp_week, y=number_of_bites, g
         scale_color_manual(values = c( "magenta3","purple3", "grey50"), name ="social position", labels=c("P max", "P min", "S")) +
         theme_classic() +
         theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = c(0.85,0.9),         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
-        ylab("Appetite (number of bites) + SEM") +
+        ylab("Food intake (number of bites) + SEM") +
         xlab("Experimental week")
 
 gg_min_max_appetite
@@ -403,7 +412,14 @@ gg_min_max_appetite
 ```
 
 
-## Inspecting the dataset {.tabset}
+## Behavior {.tabset}
+
+Below are analysis of behaviour (aggression & submission) of fish Amphiprion percula which were part of a 5 week experiment. Individuals were size-matched and either housed as a pair or as a singleton. A total of 30 replicates containing 30 pairs (n=60) and 30 singletons (n=30) were used in this experiment. This below analysis only concerns within pairs behaviour change over the 5 weeks.
+
+All data were obtained from video recordings of 5 minutes length. For most pairs we could not tell them apart, therefore, aggression and submission cannot be directly correlated with dominant and subordinate fish. During the first 3 weeks, observed aggression and submission was in most instances displayed by both individual. From weeks 3-5, size difference has emerged between pairs and aggression was mainly displayed by bigger individual and submission was mainly a response to that.
+
+
+## Inspecting the dataset
 ```{r, include=FALSE}
 beh_data <- read.csv(file = "../Data/Strategic_Growth_Behavioural_DATA_20230202.csv", header = T)
 head(beh_data)
@@ -608,6 +624,7 @@ gg_submission
 
 #ggsave("total_submission.png", height = 7, width = 7, dpi = 1200)
 ```
+
 ## Combined Figure {.tabset}
 ```{r, include=FALSE}
 head(beh_pairs)
@@ -635,7 +652,7 @@ gg_comb_beh
 #ggsave("../Figures/combined_behaviour.png", height = 7, width = 7, dpi = 1200)
 ```
 
-
+## Manuscript Figures {.tabset}
 
 ```{r}
 ## combining all 3 plots for publication
@@ -648,7 +665,7 @@ combined_plot <- plot_grid(gg_size, gg_min_max_appetite, gg_comb_beh,  ##2 of th
 
 print(combined_plot)
 
-#ggsave("../Figures/combined-phenotypic-fig-20250506-social-position.png", combined_plot,   height = 21, width = 6, dpi = 1200)  # Height scaled up (7 × 3)
+ggsave("../Figures/combined-phenotypic-fig-20250707-social-position.png", combined_plot,   height = 21, width = 6, dpi = 1200)  # Height scaled up (7 × 3)
 
 ```
 

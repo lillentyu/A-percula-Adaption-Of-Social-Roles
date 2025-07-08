@@ -1,0 +1,365 @@
+---
+title: "Colour Analysis - Phenotypic Plasticity at the Initiation of Dominance hierarchies"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "light"
+    downcute_theme: "default"
+    code_folding: hide
+---
+<style>
+  h2{color: #DC7633 !important}
+  h1{color: #5499C7 !important}
+  body{background-color: white !important}
+</style>
+
+<style>
+.list-group-item.active, .list-group-item.active:hover, .list-group-item.active:focus {
+    color: #212F3D;
+    background-color: #EDBB99;
+    font-weight: bold;}
+a {
+    color: #5499C7;}
+.nav-tabs > li.active > a, .nav-tabs > li.active > a:hover, .nav-tabs > li.active > a:focus {
+    color: #DC7633;}
+body {
+    font-family: "Open Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 15px;
+    line-height: 1.42857143;
+    color: #212F3D;}
+</style>
+
+
+<br/>
+
+```{r set some defaults, echo = FALSE}
+
+library("knitr")
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+pdf.options(useDingbats = FALSE)
+options(knitr.kable.NA = '')
+
+```
+
+
+```{r load packaged, echo=FALSE}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(multcomp)
+library(tidyr)
+library(lmerTest)
+library(emmeans)
+library(interactions)
+library(kableExtra)
+library(MuMIn)
+library(grid)
+```
+
+## Introduction
+
+https://www.rapidtables.com/web/color/RGB_Color.html - website to get hex codes from hue/RGB values
+
+
+
+```{r, include=FALSE}
+all_colour_data <- read.csv("./Data/Vizer_Strategic_growth_colour_data_SNP_corrected_20250506.csv", header = T)
+head(all_colour_data)
+
+
+colour_subset_data <- subset(all_colour_data, !replicate_ID == "8" & !replicate_ID == "9" & !replicate_ID == "18")
+head(colour_subset_data)
+colour_subset_data$replicate_ID #all good
+table(colour_subset_data$fish_type2) #all good
+
+#extract columns of interest:
+colour_subset_data <- colour_subset_data[ , c("replicate_ID", "housing_tank_ID", "fish_type2",  "initial_hue", "final_hue", "initial_saturation", "final_saturation")]
+head(colour_subset_data)
+```
+
+### List of replicates to use
+```{r}
+print(colour_subset_data$replicate_ID)
+table(colour_subset_data$fish_type2)
+```
+
+
+```{r}
+head(colour_subset_data)
+
+#extract columns of hue:
+colour_subset_data_hue <- colour_subset_data[ , c("replicate_ID", "housing_tank_ID", "fish_type2",  "initial_hue", "final_hue")]
+head(colour_subset_data_hue)
+
+hue_data <- gather(colour_subset_data_hue, key = "time", value = "hue", 4:5)
+hue_data
+
+#extract columns of saturation:
+colour_subset_data_satu <- colour_subset_data[ , c("replicate_ID", "housing_tank_ID", "fish_type2","initial_saturation", "final_saturation")]
+head(colour_subset_data_satu)
+
+satu_data <- gather(colour_subset_data_satu, key = "time", value = "satu", 4:5)
+satu_data
+```
+
+## Linear-mixed model {.tabset}
+
+### Hue
+Hue over time across three fish categories
+$formula: hue$ ~ $time*FishType2 + (1|replicateID)$
+```{r}
+hue_data$time[hue_data$time == "initial_hue"] <- "week 0"
+hue_data$time[hue_data$time == "final_hue"] <- "week 5"
+head(hue_data)
+
+#time needs to be a factor
+hue_data$time <- as.factor(hue_data$time)
+
+#fish_type2 needs to be a factor
+hue_data$fish_type2 <- as.factor(hue_data$fish_type2)
+
+#replicateID needs to be a factor
+hue_data$replicate_ID <- as.factor(hue_data$replicate_ID)
+```
+
+
+```{r}
+mixed_mod_hue <- lmer(hue ~ time*fish_type2 + (1|replicate_ID), data = hue_data)
+anova(mixed_mod_hue)
+```
+
+interaction not significant:
+
+```{r}
+mixed_mod_hue_s <- step(mixed_mod_hue,reduce.fixed = TRUE, reduce.random = TRUE)
+plot(mixed_mod_hue_s)
+mixed_mod_hue_s
+```
+
+run best model:
+```{r}
+mixed_mod_hue_final <- lmer(hue ~ time+fish_type2 + (1|replicate_ID), data = hue_data)
+anova(mixed_mod_hue_final)
+```
+R-squared values of the best fit model:
+```{r}
+r.squaredGLMM(mixed_mod_hue_final)
+```
+
+### Post-Hoc comparisons
+```{r}
+emm <- emmeans(mixed_mod_hue_final, ~ time + fish_type2)
+
+emms_tbl <- pairs(emm, simple = "each") %>%
+  rbind() 
+
+emms_tbl%>%
+   kbl(col.names = c("Fish Category", "Time", "Contrast", "Estimate", "SE", "df", "t ratio", "p-value"), caption = "Simultaneous pair-wise post-hoc comaprisons of size of fish categories (P1, P2, S) and time (week 0, week 5).", align = "c", digits = 3) %>%
+  kable_classic(full_width = F, html_font = "Cambria")%>%
+  column_spec(1:3, bold = T) %>%
+  row_spec(0, color = "white", background = "black",bold = T)
+
+```
+
+
+### Figures
+```{r summary statistics, include=FALSE}
+hue_data_summary <- ddply(hue_data, c("time", "fish_type2"),summarise,
+               N    = sum(!is.na(hue)),
+               mean = mean(hue, na.rm=TRUE),
+               sd   = sd(hue, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+hue_data_summary
+```
+
+```{r setting up data for figure, include=FALSE}
+head(hue_data)
+hue_data_summary
+colnames(hue_data_summary)[4] = "hue"
+```
+
+
+```{r size figure over time, fig.height=7, fig.width=7}
+gg_hue <- ggplot(hue_data, aes(x=time, y=hue,group=fish_type2, colour=fish_type2))+
+        geom_jitter(position = position_jitterdodge(0.8), size=4, alpha=0.3) +
+        geom_line(aes(group=fish_type2), data = hue_data_summary,  position=position_dodge(0.8), size=1)+
+        geom_pointrange(aes(ymin = hue-se, ymax = hue+se), data =hue_data_summary, size=1.2, alpha=1, position=position_dodge(0.8))+
+        scale_color_manual(values = c( "magenta3","purple3", "grey50"), name ="social poisition") +
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = c(0.15,0.9),         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        scale_y_continuous(trans = "reverse") +
+        ylab("Hue value + SEM") + 
+        xlab("Pre-experiment Post-experiment")
+gg_hue
+
+#ggsave("reverse_y_hue.png", height = 7, width = 7, dpi = 1200)
+
+```
+
+
+
+### Saturation
+Saturation over time across three fish categories
+$formula: saturation$ ~ $time*FishType2 + (1|replicateID)$
+```{r}
+satu_data$time[satu_data$time == "initial_saturation"] <- "week 0"
+satu_data$time[satu_data$time == "final_saturation"] <- "week 5"
+head(satu_data)
+
+#time needs to be a factor
+satu_data$time <- as.factor(satu_data$time)
+
+#fish_type2 needs to be a factor
+satu_data$fish_type2 <- as.factor(satu_data$fish_type2)
+
+#replicateID needs to be a factor
+satu_data$replicate_ID <- as.factor(satu_data$replicate_ID)
+```
+
+
+```{r}
+mixed_mod_satu <- lmer(satu ~ time*fish_type2 + (1|replicate_ID), data = satu_data)
+anova(mixed_mod_satu)
+```
+
+
+```{r}
+mixed_mod_satu_s <- step(mixed_mod_satu,reduce.fixed = TRUE, reduce.random = TRUE)
+plot(mixed_mod_satu_s)
+mixed_mod_satu_s
+```
+run best model:
+```{r}
+mixed_mod_satu_final <- lm(satu ~ time, data = satu_data)
+anova(mixed_mod_satu_final)
+```
+
+### Figures
+```{r summary statistics, include=FALSE}
+satu_data_summary <- ddply(satu_data, c("time", "fish_type2"),summarise,
+               N    = sum(!is.na(satu)),
+               mean = mean(satu, na.rm=TRUE),
+               sd   = sd(satu, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+satu_data_summary
+```
+
+```{r setting up data for figure, include=FALSE}
+head(satu_data)
+satu_data_summary
+colnames(satu_data_summary)[4] = "satu"
+```
+
+
+```{r size figure over time, fig.height=7, fig.width=7}
+gg_satu <- ggplot(satu_data, aes(x=time, y=satu,group=fish_type2, colour=fish_type2))+
+        geom_jitter(position = position_jitterdodge(0.8), size=4, alpha=0.3) +
+        geom_line(aes(group=fish_type2), data = satu_data_summary,  position=position_dodge(0.8), size=1)+
+        geom_pointrange(aes(ymin = satu-se, ymax = satu+se), data =satu_data_summary, size=1.2, alpha=1, position=position_dodge(0.8))+
+        scale_color_manual(values = c( "magenta3","purple3", "grey50"), name ="social position") +
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = "righ",         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        ylab("Saturation value + SEM") + 
+        xlab("Pre-experiment Post-experiment")
+gg_satu
+
+#ggsave("saturation.png", height = 7, width = 7, dpi = 1200)
+
+```
+
+```{r}
+#combine figures
+#gg_hue + gg_satu
+library(cowplot)
+
+gg_hue <- ggplot(hue_data, aes(x=time, y=hue,group=fish_type2, colour=fish_type2))+
+        geom_jitter(position = position_jitterdodge(0.8), size=4, alpha=0.3) +
+        geom_line(aes(group=fish_type2), data = hue_data_summary,  position=position_dodge(0.8), size=1)+
+        geom_pointrange(aes(ymin = hue-se, ymax = hue+se), data =hue_data_summary, size=1.2, alpha=1, position=position_dodge(0.8))+
+        scale_color_manual(values = c( "magenta3","purple3", "grey50"), name ="social poisition") +
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = c(.85,0.85),        
+              legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        #scale_y_continuous(trans = "reverse") +
+        ylab("Hue value + SEM") + 
+        xlab("Experimental week") 
+gg_hue
+
+
+gg_satu <- ggplot(satu_data, aes(x=time, y=satu,group=fish_type2, colour=fish_type2))+
+        geom_jitter(position = position_jitterdodge(0.8), size=4, alpha=0.3) +
+        geom_line(aes(group=fish_type2), data = satu_data_summary,  position=position_dodge(0.8), size=1)+
+        geom_pointrange(aes(ymin = satu-se, ymax = satu+se), data =satu_data_summary, size=1.2, alpha=1, position=position_dodge(0.8))+
+        scale_color_manual(values = c( "magenta3","purple3", "grey50"), name ="social position") +
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position = "righ",         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        ylab("Saturation value + SEM") + 
+        xlab("Experimental week")
+gg_satu
+
+
+
+combined_plot <- plot_grid(gg_hue, gg_satu, labels = c("A", "B"), ncol = 2, align = "v", rel_heights = c(1, 1))
+print(combined_plot)
+
+#save
+ggsave("combined_hue_saturation.png", plot = combined_plot, width = 14, height = 7, dpi = 1200)
+
+#save pdf
+ggsave("combined_hue_saturation.pdf", plot = combined_plot, width = 14, height = 7, dpi = 1200)
+
+
+```
+
+
+
+#### Figures with color background:
+
+```{r}
+#hue:
+reds <- c("#FF670D","#FFA640")
+g <- rasterGrob(scales::alpha(reds, 1), width=unit(1,"npc"), height = unit(1,"npc"), 
+interpolate = TRUE) 
+
+gg_hue_color <- ggplot(hue_data, aes(x=time, y=hue,group=fish_type2, shape=fish_type2)) + # add gradient background 
+   annotation_custom(g, xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf) + 
+        geom_jitter(position = position_jitterdodge(0.3), size=4, alpha=0.6) +
+        geom_line(aes(group=fish_type2), data = hue_data_summary,  position=position_dodge(0.8), size=1, color="grey80")+
+        geom_pointrange(aes(ymin = hue-se, ymax = hue+se), data =hue_data_summary, size=1.2, lwd=1.2, alpha=1, position=position_dodge(0.8), color="grey80")+
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position ="right", legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        scale_y_continuous(trans = "reverse") +
+    labs(shape = "fish category")+
+        ylab("Hue value + SEM") + 
+        xlab("Pre-experiment Post-experiment") # add data layer  
+gg_hue_color
+
+#ggsave("hue_with_color_bg.png", height = 7, width = 7, dpi = 1200)
+```
+
+
+```{r}
+#saturation
+
+gradient <- c("#FF850D","#FFD8B3")
+g1 <- rasterGrob(scales::alpha(gradient, 1), width=unit(1,"npc"), height = unit(1,"npc"), 
+interpolate = TRUE) 
+
+gg_satu_color <- ggplot(satu_data, aes(x=time, y=satu,group=fish_type2, shape=fish_type2))+
+      annotation_custom(g1, xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf) + 
+        geom_jitter(position = position_jitterdodge(0.3), size=4, alpha=0.6) +
+        geom_line(aes(group=fish_type2), data = satu_data_summary,  position=position_dodge(0.8), size=1, color="grey80")+
+        geom_pointrange(aes(ymin = satu-se, ymax = satu+se), data =satu_data_summary, size=1.2, alpha=1, position=position_dodge(0.8), color="grey80")+
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), axis.title = element_text(size = 18), legend.position ="righ",         legend.title=element_text(size=16),  legend.text=element_text(size=16))+
+        ylab("Saturation value + SEM") + 
+        xlab("Pre-experiment Post-experiment")
+
+gg_satu_color
+
+#ggsave("saturation_with_color_bg.png", height = 7, width = 7, dpi = 1200)
+```
+
+
+
