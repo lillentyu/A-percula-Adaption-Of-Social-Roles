@@ -179,4 +179,4 @@ combined_plot <- plot_grid(plot1, plot2, labels = c("A", "B"), ncol = 1, align =
 print(combined_plot)
 
 # Save the combined plot
-ggsave("combined_dendrogram_plot.png", plot = combined_plot, width = 10, height = 14, dpi = 1200)
+ggsave("combined_dendrogram_plot.png", plot = combined_plot, width = 8, height = 8, dpi = 1200, bg = "white", units = "in", limitsize = FALSE)

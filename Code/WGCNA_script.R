@@ -1255,7 +1255,7 @@ ggplot(bubble_data, aes(x = -log10(p.adj), y = name, size = nseqs, color = categ
         legend.title = element_text(size = 14),  # Increase legend title size
         legend.text = element_text(size = 14))    # Increase legend label size)
 
-ggsave("../Figures/brown_module_GO_terms_bubble_plot.png", 
+ggsave("../Figures/brown_module_GO_terms_bubble_plot_corrected.png", 
        width = 12, height = 8, dpi = 1200, bg="white")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#

@@ -64,7 +64,7 @@ https://www.rapidtables.com/web/color/RGB_Color.html - website to get hex codes 
 
 
 ```{r, include=FALSE}
-all_colour_data <- read.csv("./Data/Vizer_Strategic_growth_colour_data_SNP_corrected_20250506.csv", header = T)
+all_colour_data <- read.csv("../Data/Vizer_Strategic_growth_colour_data_SNP_corrected_20250506.csv", header = T)
 head(all_colour_data)
 
 
@@ -304,10 +304,10 @@ combined_plot <- plot_grid(gg_hue, gg_satu, labels = c("A", "B"), ncol = 2, alig
 print(combined_plot)
 
 #save
-ggsave("combined_hue_saturation.png", plot = combined_plot, width = 14, height = 7, dpi = 1200)
+ggsave("../Figures/combined_hue_saturation.png", plot = combined_plot, width = 14, height = 7, dpi = 1200, bg="white")
 
 #save pdf
-ggsave("combined_hue_saturation.pdf", plot = combined_plot, width = 14, height = 7, dpi = 1200)
+#ggsave("combined_hue_saturation.pdf", plot = combined_plot, width = 14, height = 7, dpi = 1200)
 
 
 ```
@@ -335,7 +335,7 @@ gg_hue_color <- ggplot(hue_data, aes(x=time, y=hue,group=fish_type2, shape=fish_
         xlab("Pre-experiment Post-experiment") # add data layer  
 gg_hue_color
 
-#ggsave("hue_with_color_bg.png", height = 7, width = 7, dpi = 1200)
+ggsave("../Figures/hue_with_color_bg.png", height = 7, width = 7, dpi = 1200)
 ```
 
 

@@ -234,7 +234,11 @@ gg_growth <- ggplot(subset_data, aes(x=fish_type2, y=growth, colour=fish_type2))
         geom_pointrange(aes(ymin = growth-se, ymax = growth+se), data =growth_summary, size=1.2, position = position_dodge(0.3), alpha=1)+
         scale_color_manual(values = c("magenta3","purple3", "grey50")) +
         theme_classic() +
-        theme(axis.text = element_text(size = 24), axis.title = element_text(size = 24), legend.position = "none",         legend.title=element_text(size=24),  legend.text=element_text(size=24))+
+        theme(axis.text = element_text(size = 18), 
+              axis.title = element_text(size = 18),
+              legend.position = "none",         
+              legend.title=element_text(size=24),  
+              legend.text=element_text(size=24))+
         ylab("Growth (mm/5 weeks)") +
         xlab("social position")+
         geom_hline(yintercept=4.33, linetype="dashed", lwd=1.2, color = "magenta3")+
@@ -247,7 +251,6 @@ library(cowplot)
 single <- plot_grid(gg_growth,
                            labels = c("A1"),
                            ncol = 1)
-
 
 #ggsave("../Figures/growth-20250506.png", height = 7, width = 4, dpi = 1200)
 ```
@@ -387,8 +390,8 @@ cat_plot(mixed_mod_minmax_app, pred = exp_week, modx=appetite_type, geom = "line
 
 
 ```{r}
-mixed_mod_average_app_s <- step(mixed_mod_average_app,reduce.fixed = FALSE, reduce.random = FALSE)
-mixed_mod_average_app_s
+#mixed_mod_average_app_s <- step(mixed_mod_average_app,reduce.fixed = FALSE, reduce.random = FALSE)
+#mixed_mod_average_app_s
 ```
 
 ### Figures
@@ -526,6 +529,7 @@ R-squared values of the best fit model:
 ```{r}
 r.squaredGLMM(mixed_mod_agg)
 ```
+
 ```{r}
 emm_mix_mod_agg <- emmeans(mixed_mod_agg, ~exp_week)
 pairs(emm_mix_mod_agg, simple = "each")
@@ -665,7 +669,267 @@ combined_plot <- plot_grid(gg_size, gg_min_max_appetite, gg_comb_beh,  ##2 of th
 
 print(combined_plot)
 
-ggsave("../Figures/combined-phenotypic-fig-20250707-social-position.png", combined_plot,   height = 21, width = 6, dpi = 1200)  # Height scaled up (7 × 3)
+#ggsave("../Figures/combined-phenotypic-fig-20250707-social-position.png", combined_plot,   height = 21, width = 6, dpi = 1200)  # Height scaled up (7 × 3)
 
+```
+
+### Modified figures 
+#### Separating out P1 and P2 within pairs where we could ID individuals from week 3 onwards
+```{r}
+# Summary statistics for figures
+all_data <- read.csv(file="../Data/Vizer_StrategicGrowth_behavioral_data_long.csv", header = T)
+head(all_data)
+
+#remove replicates which lost fish
+all_data <- subset(all_data, !replicate_ID == "8" & !replicate_ID == "9" & !replicate_ID == "18")
+dim(all_data)  #
+
+#summary statistics of aggression
+agg_summary <- ddply(all_data, c("fish_type2", "exp_week"),summarise,
+               N    = sum(!is.na(aggression)),
+               mean = mean(aggression, na.rm=TRUE),
+               sd   = sd(aggression, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+agg_summary
+
+#summary statistics of submission
+sub_summary <- ddply(all_data, c("fish_type2", "exp_week"),summarise,
+               N    = sum(!is.na(submission)),
+               mean = mean(submission, na.rm=TRUE),
+               sd   = sd(submission, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+sub_summary
+
+#summary statistics of appetite
+app_summary <- ddply(all_data, c("fish_type2", "exp_week"),summarise,
+               N    = sum(!is.na(appetite)),
+               mean = mean(appetite, na.rm=TRUE),
+               sd   = sd(appetite, na.rm=TRUE),
+               se   = sd / sqrt(N) )
+app_summary
+
+
+```
+
+#### New figures
+```{r}
+#plotting aggression and submission over time by fishtype2
+head(all_data)
+
+#subset and only keep P1 and P2
+all_data_beh <- subset(all_data, fish_type2 == "P1" | fish_type2 == "P2")
+
+##### AGGRESSION #####
+#y-axis should go between 0-25
+
+head(agg_summary, 15)
+#subset and only keep P1 and P2
+agg_summary <- subset(agg_summary, fish_type2 == "P1" | fish_type2 == "P2")
+colnames(agg_summary)[4] = "aggression"
+
+#try plotting from only week 3-5
+# Filter data to week 3 and above
+all_data_beh <- all_data_beh %>% dplyr::filter(exp_week >= 2)
+agg_summary  <- agg_summary  %>% dplyr::filter(exp_week >= 2)
+
+
+aggression <- ggplot(all_data_beh, aes(x=exp_week, y=aggression, group=fish_type2, colour=fish_type2))+
+        geom_jitter(position = position_jitterdodge(0.2), size=4, alpha=0.25) +
+        geom_line(aes(group=fish_type2), data = agg_summary,  position=position_dodge(0.7), size=1)+
+        geom_pointrange(aes(ymin = aggression-se, ymax = aggression+se), data =agg_summary, size=1.2, alpha=1, position=position_dodge(0.7))+
+        scale_color_manual(values = c( "magenta3","purple3"), name ="social\nposition", labels=c("P1", "P2", "S")) +
+        scale_x_continuous(breaks = 3:max(all_data_beh$exp_week))+
+        scale_y_continuous(limits = c(0, 25), breaks = seq(0, 25, by = 10)) +   # choose spacing (e.g. every 5 weeks)
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), 
+              axis.title = element_text(size = 18), 
+              legend.position = c(0.85,0.9),        
+              legend.title=element_text(size=13),  
+              legend.text=element_text(size=13)
+              #legend.key.size = unit(0.4, "cm")
+              )+
+        ylab("Total agression + SEM") +
+        xlab("Experimental week")
+
+aggression
+
+
+##### SUBMISSION #####
+#y-axis should go between 0-25
+sub_summary <- subset(sub_summary, fish_type2 == "P1" | fish_type2 == "P2")
+colnames(sub_summary)[4] = "submission"
+
+sub_summary <- sub_summary  %>% dplyr::filter(exp_week >= 2)
+
+submission <- ggplot(all_data_beh, aes(x=exp_week, y=submission, group=fish_type2, colour=fish_type2))+
+        geom_jitter(position = position_jitterdodge(0.2), size=4, alpha=0.25) +
+        geom_line(aes(group=fish_type2), data = sub_summary,  position=position_dodge(0.7), size=1)+
+        geom_pointrange(aes(ymin = submission-se, ymax = submission+se), data =sub_summary, size=1.2, alpha=1, position=position_dodge(0.7))+
+        scale_color_manual(values = c( "magenta3","purple3"), name ="social\nposition", labels=c("P1", "P2", "S")) +
+        scale_x_continuous(breaks = 3:max(all_data_beh$exp_week))+
+        scale_y_continuous(limits = c(0, 25), breaks = seq(0, 25, by = 10)) +   # choose spacing (e.g. every 5 weeks)
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), 
+              axis.title = element_text(size = 18), 
+              legend.position = c(0.85,0.9),        
+              legend.title=element_text(size=13),  
+              legend.text=element_text(size=13)
+              #legend.key.size = unit(0.4, "cm")
+              )+
+        ylab("Total submission + SEM") +
+        xlab("Experimental week")
+submission
+
+#### APPETITE#####
+#y axis should go between 0-45
+
+app_summary
+colnames(app_summary)[4] = "appetite"
+
+app_summary <- app_summary  %>% dplyr::filter(exp_week >= 3)
+all_data_sub <- all_data %>% dplyr::filter(exp_week >= 3)
+
+
+appetite <- ggplot(all_data_sub, aes(x=exp_week, y=appetite, group=fish_type2, colour=fish_type2))+
+        geom_jitter(position = position_jitterdodge(0.2), size=4, alpha=0.25) +
+        geom_line(aes(group=fish_type2), data = app_summary,  position=position_dodge(0.7), size=1)+
+        geom_pointrange(aes(ymin = appetite-se, ymax = appetite+se), data =app_summary, size=1.2, alpha=1, position=position_dodge(0.7))+
+        scale_color_manual(values = c( "magenta3","purple3", "grey50"), name ="social\nposition", labels=c("P1", "P2", "S")) +
+        scale_x_continuous(breaks = 3:max(all_data_beh$exp_week))+
+        scale_y_continuous(limits = c(0, 45), breaks = seq(0, 45, by = 10)) +   # choose spacing (e.g. every 5 weeks)
+        theme_classic() +
+        theme(axis.text = element_text(size = 18), 
+              axis.title = element_text(size = 18), 
+              legend.position = c(0.85,0.9),        
+              legend.title=element_text(size=13),  
+              legend.text=element_text(size=13)
+              #legend.key.size = unit(0.4, "cm")
+              )+
+        ylab("Food intake (number of bites) + SEM") +
+        xlab("Experimental week")
+
+```
+
+#### Combined figures
+```{r}
+#combining all figures together
+library(cowplot)
+# Combine growth, appetite, and behaviour
+
+blank <- ggplot() + theme_void()
+# Row A (just one plot)
+row_A <- plot_grid(
+  gg_size, gg_growth, blank,
+  labels = c("A", "A.1"),
+  ncol = 3,
+  rel_widths = c(1, 0.5, 0.5)   # growth full width, extra half width
+)
+
+# Row B (main plot + extra)
+row_B <- plot_grid(
+  gg_min_max_appetite, appetite, blank,
+  labels = c("B", "B.1", ""),
+  ncol = 3,
+  rel_widths = c(1, 0.5, 0.5)   # appetite full width, extra half width
+)
+
+# Row C (main plot + 2 extras)
+row_C <- plot_grid(
+  gg_comb_beh, aggression, submission,
+  labels = c("C", "C.1", "C.2"),
+  ncol = 3,
+  rel_widths = c(1, 0.5, 0.5)  # main full, extras half each
+)
+
+# Combine rows — equal heights
+combined_plot <- plot_grid(
+  row_A, row_B, row_C,
+  ncol = 1,
+  rel_heights = c(1, 1, 1),  # equal row heights
+  align = "v"
+)
+
+ggsave("../Figures/combined-phenotypic-fig-20251001-social-position.png", combined_plot,   height = 21, width = 16, dpi = 1200, bg="white")  # Height scaled up (7 × 3)
+ggsave("../Figures/combined-phenotypic-fig-20251001-social-position.pdf", combined_plot,   height = 21, width = 16, dpi = 1200, bg="white")
+
+```
+
+
+### Linear Mixed Models - for behaviour and appetite subset of known IDs{.tabset}
+
+```{r}
+#aggression & submission
+head(all_data_beh)
+str(all_data_beh)
+all_data_beh$fish_type2 <- as.factor(all_data_beh$fish_type2)
+all_data_beh$exp_week <- as.factor(all_data_beh$exp_week)
+
+
+#appetite
+head(all_data_sub)
+str(all_data_sub)
+all_data_sub$fish_type2 <- as.factor(all_data_sub$fish_type2)
+all_data_sub$exp_week <- as.factor(all_data_sub$exp_week)
+
+```
+
+### Food intake w/ P1 & P2 & S {.tabset}
+```{r}
+mixed_mod_appP1P2 <- lmer(appetite ~ exp_week*fish_type2 + (1|housing_tank_ID), data = all_data_sub)
+anova(mixed_mod_appP1P2)
+
+#simplified model
+mixed_mod_appP1P2_2 <- lmer(appetite ~ fish_type2 + (1|housing_tank_ID), data = all_data_sub)
+anova(mixed_mod_appP1P2_2)
+```
+
+```{r}
+emm_mix_mod_appP1P2 <- emmeans(mixed_mod_appP1P2, ~exp_week*fish_type2)
+pairs(emm_mix_mod_appP1P2, simple = "each")
+
+#simplified model
+emm_mix_mod_appP1P2_2 <- emmeans(mixed_mod_appP1P2_2, ~fish_type2)
+pairs(emm_mix_mod_appP1P2_2, simple = "each")
+```
+
+R-squared values of the best fit model:
+```{r}
+r.squaredGLMM(mixed_mod_appP1P2)
+
+#simplified model
+r.squaredGLMM(mixed_mod_appP1P2_2)
+```
+
+### Aggression w/ P1 & P2 {.tabset}
+```{r}
+mixed_mod_aggrP1P2 <- lmer(aggression ~ exp_week*fish_type2 + (1|housing_tank_ID), data = all_data_beh_sub)
+anova(mixed_mod_aggrP1P2)
+```
+
+```{r}
+emm_mix_mod_aggP1P2 <- emmeans(mixed_mod_aggrP1P2, ~exp_week*fish_type2)
+pairs(emm_mix_mod_aggP1P2, simple = "each")
+```
+
+R-squared values of the best fit model:
+```{r}
+r.squaredGLMM(mixed_mod_aggrP1P2)
+```
+
+### Submission w/ P1 & P2 {.tabset}
+```{r}
+mixed_mod_subP1P2 <- lmer(submission ~ exp_week*fish_type2 + (1|housing_tank_ID), data = all_data_beh)
+anova(mixed_mod_subP1P2)
+```
+
+
+```{r}
+emm_mix_mod_subP1P2 <- emmeans(mixed_mod_subP1P2, ~exp_week*fish_type2)
+pairs(emm_mix_mod_subP1P2, simple = "each")
+```
+
+R-squared values of the best fit model:
+```{r}
+r.squaredGLMM(mixed_mod_subP1P2)
 ```
 
