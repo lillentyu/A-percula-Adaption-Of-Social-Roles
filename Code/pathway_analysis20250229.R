@@ -45,6 +45,7 @@ library(gplots)
 library(gridExtra)
 library(ggrepel)
 library(vegan) #for adonis
+library(svglite)
 
 
 ### Clean up the workspace
@@ -846,17 +847,15 @@ for (file in dataFiles) {
 
 
 
-
-#####################################################
-################# heatmap of manuscript #############
-#####################################################
+#### heatmap of manuscript
+#############################################################################
 
 library(ComplexHeatmap)
 
 #first read in original files
 appetite_origin <- read.table("../Data/gene_lists/percula.appetite.regulation.txt", header = TRUE)
 krebs_origin <- read.table("../Data/gene_lists/percula.metabolism.tca.cycle.txt", header = TRUE)
-glycolysis_origin <- read.table("./Data/gene_lists/percula.metabolism.glycolysis.txt", header = TRUE)
+glycolysis_origin <- read.table("../Data/gene_lists/percula.metabolism.glycolysis.txt", header = TRUE)
 
 
 significance_data <- read.table("../Data/rldpvals_significance_data2025-03-29.txt", header = TRUE, row.names = 1)
@@ -952,7 +951,7 @@ cell_size <- 14  # in points, since PDF units are in inches * 72
 pdf_width <- ncol(merged_data) * cell_size / 72  # convert to inches
 pdf_height <- nrow(merged_data) * cell_size / 72
 
-pdf(("../Figures/Heatmap_combined_AppetiteKrebsGlycolysis_20250406.pdf"), width = 9, height = 6)
+#pdf(("../Figures/Heatmap_combined_AppetiteKrebsGlycolysis_20250406.pdf"), width = 9, height = 6)
 
 fontsize = 13
 
@@ -983,6 +982,1094 @@ ht_map <- ComplexHeatmap::pheatmap(as.matrix(merged_data[ , 1:(ncol(merged_data)
 draw(ht_map, merge_legend = TRUE)
 
 dev.off()
+
+
+
+###### FURTHER MODIFIED TO ICNLUDE SIZE RATIO AT THE BOTTOM OF THE HEATMAP AS A BARPLOT ANNOTATION 
+
+
+
+
+
+
+
+### HEATMAP OF MANUSCRIPT WITH APT, TCA, GLY ROW GROUPED 
+#############################################################################
+
+
+# Keep only genes which are significant at pval 0.01 for either P1vsP2 or P1vsS
+filtered_genes_appetite <- significant_genes_appetite %>%
+  filter(pval.P1vsP2 < 0.01 | pval.P1vsS < 0.01)
+
+filtered_genes_krebs <- significant_genes_krebs %>%
+  filter(pval.P1vsP2 < 0.01 | pval.P1vsS < 0.01)
+
+filtered_genes_glycolysis <- significant_genes_glycolysis %>%
+  filter(pval.P1vsP2 < 0.01 | pval.P1vsS < 0.01)
+
+# Add pathway label to each dataset before combining
+filtered_genes_appetite$pathway   <- "APT"
+filtered_genes_krebs$pathway      <- "TCA"
+filtered_genes_glycolysis$pathway <- "GLY"
+
+# Combine the filtered data
+merged_data <- rbind(filtered_genes_appetite, filtered_genes_krebs, filtered_genes_glycolysis)
+
+# Save pathway vector before as.matrix() removes it
+pathway_vector <- factor(merged_data$pathway, levels = c("APT", "TCA", "GLY"))
+
+# Convert to matrix
+merged_data <- as.matrix(merged_data)
+
+# Extract expression columns and force them to be numeric
+expr_mat <- apply(merged_data[, 1:(ncol(merged_data)-7)], 2, as.numeric)
+rownames(expr_mat) <- rownames(merged_data)
+
+# Row annotations with stars
+row_annotations <- lapply(1:nrow(merged_data), function(i) {
+  row <- merged_data[i, ]
+  pval_p1p2 <- as.numeric(row[["pval.P1vsP2"]])
+  pval_p1s  <- as.numeric(row[["pval.P1vsS"]])
+  padj_p1p2 <- as.numeric(row[["padj.P1vsP2"]])
+  padj_p1s  <- as.numeric(row[["padj.P1vsS"]])
+  
+  stars <- ""
+  if (!is.na(pval_p1p2) && pval_p1p2 < 0.01 && !is.na(pval_p1s) && pval_p1s < 0.01) {
+    stars <- "***"
+  } else if (!is.na(pval_p1p2) && pval_p1p2 < 0.01) {
+    stars <- "*"
+  } else if (!is.na(pval_p1s) && pval_p1s < 0.01) {
+    stars <- "**"
+  }
+  
+  bold <- (!is.na(padj_p1p2) && padj_p1p2 < 0.1) || (!is.na(padj_p1s) && padj_p1s < 0.1)
+  
+  list(label = paste0(rownames(merged_data)[i], stars), bold = bold)
+})
+
+# Extract new row labels and bold info
+row_labels   <- sapply(row_annotations, function(x) x$label)
+row_fontface <- ifelse(sapply(row_annotations, function(x) x$bold), "bold.italic", "plain")
+table(row_labels = row_labels, row_fontface = row_fontface)
+
+# Column annotations
+annotation_col <- data.frame(
+  social_position = c(rep("S", 15), rep("P1", 15), rep("P2", 15)),
+  clutch_ID = c("L6","L2","L3","L6","L2","L3","L2","L2","L2","L6","L3","L3","L3","L6",
+                "L3","L3","L6","L2","L2","L3","L6","L6","L6","L3","L3","L6","L2","L6",
+                "L3","L6","L2","L3","L6","L3","L6","L2","L3","L3","L6","L2","L2","L6",
+                "L2","L2","L2"))
+
+ann_colors <- list(
+  social_position = c(P1 = "magenta3", P2 = "purple3", S = "grey50"),
+  clutch_ID       = c(L2 = "brown", L3 = "brown1", L6 = "burlywood1")
+)
+
+ha <- HeatmapAnnotation(
+  social_position    = annotation_col$social_position,
+  clutch_ID          = annotation_col$clutch_ID,
+  col                = ann_colors,
+  annotation_name_gp = gpar(fontface = "bold"),
+  annotation_label   = c(social_position = "social position",   # <-- renamed
+                         clutch_ID       = "clutch ID"),         # <-- renamed
+  annotation_legend_param = list(
+    social_position = list(title_gp = gpar(fontface = "bold", fontsize = 13),    #adjust legend font size here
+                           labels_gp = gpar(fontsize= 12)),
+    clutch_ID       = list(title_gp = gpar(fontface = "bold", fontsize = 13),
+                           labels_gp = gpar(fontsize= 12))))
+
+
+# Left row annotation (colored sidebar by pathway)
+row_ann <- rowAnnotation(
+  Pathway = pathway_vector,
+  col = list(Pathway = c(
+    APT  = "seagreen",
+    TCA   = "darkseagreen3",
+    GLY   = "palegreen2"
+  )),
+  annotation_name_gp = gpar(fontface = "bold"),
+  annotation_label = "pathway",
+  annotation_name_side = "top",#move label to the top
+  annotation_legend_param = list(
+    Pathway = list(title_gp = gpar(fontface = "bold", fontsize = 13),    #adjust legend font size here
+                   labels_gp = gpar(fontsize= 12)))
+)
+
+# # ─────────────────────────────────────────────────────────────
+# # NEW: load size ratio data and create bottom annotation
+# # ─────────────────────────────────────────────────────────────
+# 
+# growth_data <- read.csv("../Data/Vizer_StrategicGrowth_phenotypicdata_SNPcorrected_20230906.csv",
+#                         header = TRUE)
+# 
+# size_ratio        <- growth_data[, c("replicate_ID", "fish_type2", "final_size_ratio")]
+# size_ratio$sampleID <- paste(size_ratio$replicate_ID, size_ratio$fish_type2, sep = "")
+# rownames(size_ratio) <- size_ratio$sampleID
+# 
+# # NEW: use column names of expr_mat to match heatmap column order
+# heatmap_colnames <- colnames(expr_mat)
+# 
+# # NEW: sort size_ratio rows to match heatmap column order
+# sorted_size_ratio <- size_ratio[heatmap_colnames, "final_size_ratio", drop = FALSE]
+# 
+# # NEW: color bars black if ratio < 0.8, red if >= 0.8
+# custom_colors <- ifelse(sorted_size_ratio$final_size_ratio < 0.8, "black", "red")
+# 
+# # NEW: create bottom annotation with barplot
+# ha1 <- HeatmapAnnotation(
+#   ratio = anno_barplot(
+#     sorted_size_ratio$final_size_ratio,
+#     gp         = gpar(fill = custom_colors),
+#     ylim = c(0,1),
+#     axis_param = list(side = "left")   # NEW: moves numbers to left side
+#   ),
+#   annotation_name_gp   = gpar(fontface = "bold"),
+#   show_annotation_name = TRUE,
+#   annotation_name_side = "right",
+#   annotation_label = "size ratio"
+# )
+# 
+# # Manual legend for black/red bar colours
+# lgd_ratio <- Legend(
+#   labels    = c("≤ 0.8", "> 0.8"),   # ≤ and > symbols
+#   title     = "size ratio",
+#   legend_gp = gpar(fill = c("black", "red")),
+#   labels_gp = gpar(fontsize = 12),                              # adjust legend label font size here
+#   title_gp  = gpar(fontface = "bold", fontsize = 13)    
+# )
+# 
+# # ─────────────────────────────────────────────────────────────
+
+col0 <- colorRampPalette(rev(c("chocolate1", "#FEE090", "grey10", "cyan3", "cyan")))(100)
+
+cell_size <- 14
+
+# Calculate dimensions dynamically
+n_cols <- ncol(expr_mat)
+n_rows <- nrow(expr_mat)
+
+pdf_width  <- (n_cols * cell_size / 72) + 8
+pdf_height <- (n_rows * cell_size / 72) + 4   # NEW: +4 instead of +3 to fit bottom annotation
+
+#pdf("../Figures/Heatmap_combined_AppetiteKrebsGlycolysis_20260402.pdf",
+#    width  = pdf_width,
+#    height = pdf_height)
+
+
+svglite("../Figures/Heatmap_combined_AppetiteKrebsGlycolysis_20260417.1.svg", #editable svg file
+        width  = pdf_width,
+        height = pdf_height)
+
+fontsize <- 13
+
+ht_map <- ComplexHeatmap::pheatmap(
+  expr_mat,
+  name                 = "z-score",
+  cluster_cols         = TRUE,   
+  cluster_rows         = TRUE,
+  scale                = "row",
+  color                = col0,
+  top_annotation       = ha,
+  #bottom_annotation    = ha1,          # NEW: add size ratio barplot at bottom
+  column_split         = annotation_col$social_position,  
+  row_labels           = row_labels,
+  row_split            = pathway_vector,
+  left_annotation      = row_ann,
+  show_colnames        = TRUE,
+  border_color         = "NA",
+  cellwidth            = cell_size,
+  cellheight           = cell_size,
+  annotation_names_col = FALSE,
+  fontsize             = fontsize,
+  fontsize_row         = fontsize,
+  fontsize_col         = fontsize,
+  heatmap_legend_param = list(
+    labels_gp = gpar(fontsize = 12),
+    title_gp  = gpar(fontface = "bold", fontsize = 13)))
+
+
+draw(ht_map,
+     merge_legend           = TRUE,
+     #annotation_legend_list = list(lgd_ratio)
+     )   # <-- attach legend here
+
+# # Draw dashed line at 0.8 across all 3 column split slices
+# for (i in 1:3) {
+#   decorate_annotation("ratio", slice = i, {
+#     grid.lines(
+#       x  = unit(c(0, 1), "npc"),
+#       y  = unit(c(0.8, 0.8), "native"),   # 0.8 in data coordinates
+#       gp = gpar(col = "black", lty = "dashed", lwd = 1.5)
+#     )
+#   })
+# }
+
+dev.off()
+
+
+#futher modified to include bottom size ratio annotation
+##############################################################################
+
+
+# Keep only genes which are significant at pval 0.01 for either P1vsP2 or P1vsS
+filtered_genes_appetite <- significant_genes_appetite %>%
+  filter(pval.P1vsP2 < 0.01 | pval.P1vsS < 0.01)
+
+filtered_genes_krebs <- significant_genes_krebs %>%
+  filter(pval.P1vsP2 < 0.01 | pval.P1vsS < 0.01)
+
+filtered_genes_glycolysis <- significant_genes_glycolysis %>%
+  filter(pval.P1vsP2 < 0.01 | pval.P1vsS < 0.01)
+
+# Add pathway label to each dataset before combining
+filtered_genes_appetite$pathway   <- "APT"
+filtered_genes_krebs$pathway      <- "TCA"
+filtered_genes_glycolysis$pathway <- "GLY"
+
+# Combine the filtered data
+merged_data <- rbind(filtered_genes_appetite, filtered_genes_krebs, filtered_genes_glycolysis)
+
+# Save pathway vector before as.matrix() removes it
+pathway_vector <- factor(merged_data$pathway, levels = c("APT", "TCA", "GLY"))
+
+# Convert to matrix
+merged_data <- as.matrix(merged_data)
+
+# Extract expression columns and force them to be numeric
+expr_mat <- apply(merged_data[, 1:(ncol(merged_data)-7)], 2, as.numeric)
+rownames(expr_mat) <- rownames(merged_data)
+
+# Row annotations with stars
+row_annotations <- lapply(1:nrow(merged_data), function(i) {
+  row <- merged_data[i, ]
+  pval_p1p2 <- as.numeric(row[["pval.P1vsP2"]])
+  pval_p1s  <- as.numeric(row[["pval.P1vsS"]])
+  padj_p1p2 <- as.numeric(row[["padj.P1vsP2"]])
+  padj_p1s  <- as.numeric(row[["padj.P1vsS"]])
+  
+  stars <- ""
+  if (!is.na(pval_p1p2) && pval_p1p2 < 0.01 && !is.na(pval_p1s) && pval_p1s < 0.01) {
+    stars <- "***"
+  } else if (!is.na(pval_p1p2) && pval_p1p2 < 0.01) {
+    stars <- "*"
+  } else if (!is.na(pval_p1s) && pval_p1s < 0.01) {
+    stars <- "**"
+  }
+  
+  bold <- (!is.na(padj_p1p2) && padj_p1p2 < 0.1) || (!is.na(padj_p1s) && padj_p1s < 0.1)
+  
+  list(label = paste0(rownames(merged_data)[i], stars), bold = bold)
+})
+
+# Extract new row labels and bold info
+row_labels   <- sapply(row_annotations, function(x) x$label)
+row_fontface <- ifelse(sapply(row_annotations, function(x) x$bold), "bold.italic", "plain")
+table(row_labels = row_labels, row_fontface = row_fontface)
+
+# Column annotations
+annotation_col <- data.frame(
+  social_position = c(rep("S", 15), rep("P1", 15), rep("P2", 15)),
+  clutch_ID = c("L6","L2","L3","L6","L2","L3","L2","L2","L2","L6","L3","L3","L3","L6",
+                "L3","L3","L6","L2","L2","L3","L6","L6","L6","L3","L3","L6","L2","L6",
+                "L3","L6","L2","L3","L6","L3","L6","L2","L3","L3","L6","L2","L2","L6",
+                "L2","L2","L2"))
+
+ann_colors <- list(
+  social_position = c(P1 = "magenta3", P2 = "purple3", S = "grey50"),
+  clutch_ID       = c(L2 = "brown", L3 = "brown1", L6 = "burlywood1")
+)
+
+ha <- HeatmapAnnotation(
+  social_position    = annotation_col$social_position,
+  clutch_ID          = annotation_col$clutch_ID,
+  col                = ann_colors,
+  annotation_name_gp = gpar(fontface = "bold"),
+  annotation_label   = c(social_position = "social position",   # <-- renamed
+                         clutch_ID       = "clutch ID"),         # <-- renamed
+  annotation_legend_param = list(
+    social_position = list(title_gp = gpar(fontface = "bold", fontsize = 13),    #adjust legend font size here
+                           labels_gp = gpar(fontsize= 12)),
+    clutch_ID       = list(title_gp = gpar(fontface = "bold", fontsize = 13),
+                           labels_gp = gpar(fontsize= 12))))
+
+
+# Left row annotation (colored sidebar by pathway)
+row_ann <- rowAnnotation(
+  Pathway = pathway_vector,
+  col = list(Pathway = c(
+    APT  = "seagreen",
+    TCA   = "darkseagreen3",
+    GLY   = "palegreen2"
+  )),
+  annotation_name_gp = gpar(fontface = "bold"),
+  annotation_label = "pathway",
+  annotation_name_side = "top",#move label to the top
+  annotation_legend_param = list(
+    Pathway = list(title_gp = gpar(fontface = "bold", fontsize = 13),    #adjust legend font size here
+                   labels_gp = gpar(fontsize= 12)))
+)
+
+# ─────────────────────────────────────────────────────────────
+# NEW: load size ratio data and create bottom annotation
+# ─────────────────────────────────────────────────────────────
+
+growth_data <- read.csv("../Data/Vizer_StrategicGrowth_phenotypicdata_SNPcorrected_20230906.csv",
+                        header = TRUE)
+
+size_ratio        <- growth_data[, c("replicate_ID", "fish_type2", "final_size_ratio")]
+size_ratio$sampleID <- paste(size_ratio$replicate_ID, size_ratio$fish_type2, sep = "")
+rownames(size_ratio) <- size_ratio$sampleID
+
+# NEW: use column names of expr_mat to match heatmap column order
+heatmap_colnames <- colnames(expr_mat)
+
+# NEW: sort size_ratio rows to match heatmap column order
+sorted_size_ratio <- size_ratio[heatmap_colnames, "final_size_ratio", drop = FALSE]
+
+# NEW: color bars black if ratio < 0.8, red if >= 0.8
+custom_colors <- ifelse(sorted_size_ratio$final_size_ratio < 0.8, "black", "red")
+
+# NEW: create bottom annotation with barplot
+ha1 <- HeatmapAnnotation(
+  ratio = anno_barplot(
+    sorted_size_ratio$final_size_ratio,
+    gp         = gpar(fill = custom_colors),
+    ylim = c(0,1),
+    axis_param = list(side = "left")   # NEW: moves numbers to left side
+    ),
+  annotation_name_gp   = gpar(fontface = "bold"),
+  show_annotation_name = TRUE,
+  annotation_name_side = "right",
+  annotation_label = "size ratio"
+)
+
+# Manual legend for black/red bar colours
+lgd_ratio <- Legend(
+  labels    = c("≤ 0.8", "> 0.8"),   # ≤ and > symbols
+  title     = "size ratio",
+  legend_gp = gpar(fill = c("black", "red")),
+  labels_gp = gpar(fontsize = 12),                              # adjust legend label font size here
+  title_gp  = gpar(fontface = "bold", fontsize = 13)    
+)
+
+# ─────────────────────────────────────────────────────────────
+
+col0 <- colorRampPalette(rev(c("chocolate1", "#FEE090", "grey10", "cyan3", "cyan")))(100)
+
+cell_size <- 14
+
+# Calculate dimensions dynamically
+n_cols <- ncol(expr_mat)
+n_rows <- nrow(expr_mat)
+
+pdf_width  <- (n_cols * cell_size / 72) + 8
+pdf_height <- (n_rows * cell_size / 72) + 4   # NEW: +4 instead of +3 to fit bottom annotation
+
+#pdf("../Figures/Heatmap_combined_ratio_AppetiteKrebsGlycolysis_20260402.pdf",
+#    width  = pdf_width,
+#    height = pdf_height)
+
+
+svglite("../Figures/Heatmap_combined_ratio_AppetiteKrebsGlycolysis_20260417.1.svg", #editable svg file
+        width  = pdf_width,
+        height = pdf_height)
+
+fontsize <- 13
+
+ht_map <- ComplexHeatmap::pheatmap(
+  expr_mat,
+  name                 = "z-score",
+  cluster_cols         = TRUE,   
+  cluster_rows         = TRUE,
+  scale                = "row",
+  color                = col0,
+  top_annotation       = ha,
+  bottom_annotation    = ha1,          # NEW: add size ratio barplot at bottom
+  column_split         = annotation_col$social_position,  
+  row_labels           = row_labels,
+  row_split            = pathway_vector,
+  left_annotation      = row_ann,
+  show_colnames        = TRUE,
+  border_color         = "NA",
+  cellwidth            = cell_size,
+  cellheight           = cell_size,
+  annotation_names_col = FALSE,
+  fontsize             = fontsize,
+  fontsize_row         = fontsize,
+  fontsize_col         = fontsize,
+  heatmap_legend_param = list(
+    labels_gp = gpar(fontsize = 12),
+    title_gp  = gpar(fontface = "bold", fontsize = 13)))
+
+
+draw(ht_map,
+     merge_legend           = TRUE,
+     annotation_legend_list = list(lgd_ratio))   # <-- attach legend here
+
+# Draw dashed line at 0.8 across all 3 column split slices
+for (i in 1:3) {
+  decorate_annotation("ratio", slice = i, {
+    grid.lines(
+      x  = unit(c(0, 1), "npc"),
+      y  = unit(c(0.8, 0.8), "native"),   # 0.8 in data coordinates
+      gp = gpar(col = "black", lty = "dashed", lwd = 1.5)
+    )
+  })
+}
+
+dev.off()
+
+
+
+##### generating a PCA with permanova scores from the above 2 heatmaps 
+#############################################################################
+#_____________________________________________________________________
+# ANALYSIS 1: PCA + PERMANOVA — all 45 samples
+# Do samples cluster by social_position and/or clutch_ID?
+#_____________________________________________________________________
+# Extract the scaled data from your heatmap (same scaling as heatmap: scale="row")
+# Scale by rows (z-score normalization)
+scaled_expr <- t(scale(t(expr_mat)))
+
+# Metadata for all 45 samples
+metadata_all <- data.frame(
+  sampleID        = colnames(expr_mat),
+  social_position = factor(annotation_col$social_position,
+                           levels = c("P1", "P2", "S")),
+  clutch_ID       = factor(annotation_col$clutch_ID,
+                           levels = c("L2", "L3", "L6")),
+  row.names       = colnames(expr_mat),
+  stringsAsFactors = FALSE
+)
+
+# PCA
+#    center = FALSE: z-score already centers the data
+pca_all <- prcomp(t(scaled_expr), center = FALSE, scale. = FALSE)
+pctVar  <- round(100 * pca_all$sdev^2 / sum(pca_all$sdev^2), 1)
+pca_df  <- cbind(as.data.frame(pca_all$x), metadata_all)
+
+
+# PERMANOVA
+
+dist_all <- dist(t(scaled_expr), method = "euclidean")
+
+set.seed(42)
+adonis_res <- adonis2(
+  dist_all ~ social_position + clutch_ID,
+  data         = metadata_all,
+  permutations = 999,
+  by           = "margin"
+)
+
+print(adonis_res)
+# Permutation test for adonis under reduced model
+# Marginal effects of terms
+# Permutation: free
+# Number of permutations: 999
+# 
+# adonis2(formula = dist_all ~ social_position + clutch_ID, data = metadata_all, permutations = 999, by = "margin")
+# Df SumOfSqs      R2      F Pr(>F)    
+# social_position  2   146.59 0.20822 6.0238  0.001 ***
+#   clutch_ID        2    60.67 0.08618 2.4932  0.015 *  
+#   Residual        40   486.70 0.69133                  
+# Total           44   704.00 1.00000                  
+# ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+# Format p-values
+format_p <- function(p, nperm = 999) {
+  min_p <- 1 / (nperm + 1)
+  if (!is.na(p) && p <= min_p) {
+    paste0("< ", formatC(min_p, digits = 3, format = "f"))
+  } else {
+    formatC(p, digits = 3, format = "f")
+  }
+}
+
+pval_label <- paste0(
+  "Social position : p ", format_p(adonis_res["social_position", "Pr(>F)"]), "\n",
+  "Clutch ID       : p = ", format_p(adonis_res["clutch_ID",       "Pr(>F)"])
+)
+
+
+clutch_shapes <- c(L2 = 22, L3 = 21, L6 = 24)         # square, circle, triangle
+social_colors <- c(P1 = "magenta3", P2 = "purple3", S = "grey50")
+
+pca_plot_all_app <- ggplot(pca_df,
+                       aes(x     = PC1,
+                           y     = PC2,
+                           fill  = social_position,    # point interior
+                           color = social_position,    # point border + ellipse
+                           shape = clutch_ID)) +
+  stat_ellipse(
+    aes(x      = PC1,
+        y      = PC2,
+        colour = social_position),
+    inherit.aes = FALSE,                               # prevents 3 ellipses per group
+    geom        = "polygon",
+    fill        = NA,
+    type        = "t",
+    level       = 0.95,
+    linewidth   = 2,
+    show.legend = FALSE
+  ) +
+  geom_point(size = 4, stroke = 1.5) +
+  # fill + color share same name → merged into one legend block
+  scale_fill_manual(
+    values = social_colors,
+    name   = "social position"
+  ) +
+  scale_color_manual(
+    values = social_colors,
+    name   = "social position"
+  ) +
+  scale_shape_manual(
+    values = clutch_shapes,
+    name   = "clutch ID"
+  ) +
+  xlab(paste0("PC1 (", pctVar[1], "%)")) +
+  ylab(paste0("PC2 (", pctVar[2], "%)")) +
+  # PERMANOVA p-values — bottom right corner
+  annotate(
+    "text",
+    x          = Inf,  y = -Inf,
+    label      = pval_label,
+    hjust      = 1,    vjust = -0.2,
+    size       = 3.5,
+    lineheight = 1.5,
+    fontface   = "plain"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    legend.position  = "right",
+    legend.key       = element_blank(),
+    legend.text      = element_text(size = 10),
+    legend.title     = element_text(size = 11),
+    legend.spacing.y = unit(0.5, "cm"),
+    legend.margin    = margin(0, 0, 0, 0)
+  )
+
+print(pca_plot_all_app)
+
+ggsave(pca_plot_all_app, filename = "../Figures/PCA_heatmap_AppetiteKrebsGlycolysis_allsamples_20260410.1.pdf", width = 10, height = 8, dpi = 1200)
+ggsave(pca_plot_all_app, filename = "../Figures/PCA_heatmap_AppetiteKrebsGlycolysis_allsamples_20260410.1.png", width = 10, height = 8, dpi = 1200)
+
+
+
+# ANALYSIS 2: Does size_ratio_cat explain within-group 
+# gene expression variation in P1 and P2?
+
+library(permute)
+# Row-scale expression matrix (same as heatmap scale = "row")
+scaled_expr <- t(scale(t(expr_mat)))   # z-score per gene across samples
+
+# Build metadata from column names
+
+col_names     <- colnames(expr_mat)
+# Extract pair ID (leading digits) and social position (trailing letters)
+pair_ID       <- gsub("(P1|P2|S)$", "", col_names)      # e.g. "7", "1", "10"
+soc_from_name <- gsub("^[0-9]+",    "", col_names)       # e.g. "S", "P1", "P2"
+
+# Sanity check: column name extraction matches annotation_col
+if (!all(soc_from_name == annotation_col$social_position)) {
+  warning("Social position from column names doesn't match annotation_col — check column order!")
+}
+
+metadata <- data.frame(
+  sampleID        = col_names,
+  social_position = annotation_col$social_position,
+  clutch_ID       = annotation_col$clutch_ID,
+  pair_ID         = pair_ID,
+  size_ratio      = sorted_size_ratio$final_size_ratio,
+  row.names       = col_names,
+  stringsAsFactors = FALSE
+)
+
+# S fish have no meaningful size ratio — set to NA
+metadata$size_ratio[metadata$social_position == "S"] <- NA
+
+
+# Subset to P1 + P2 only (for size_ratio analysis)
+
+idx_paired    <- metadata$social_position %in% c("P1", "P2")
+scaled_paired <- scaled_expr[, idx_paired]
+meta_paired   <- metadata[idx_paired, ]
+
+#_________________________________________________________________________
+# PERMANOVA — P1 + P2 - need to control for pairs not being independent
+#    Restricted permutations: entire pairs permute as units
+#    (P1 and P2 from the same pair stay together → preserves
+#     within-pair structure when testing pair-level size_ratio)
+#_________________________________________________________________________
+dist_paired <- dist(t(scaled_paired), method = "euclidean")
+
+perm_ctrl <- how(
+  nperm  = 999,
+  plots  = Plots(strata = meta_paired$pair_ID, type = "free"),
+  within = Within(type  = "none")   # no shuffling within pairs
+)
+
+set.seed(42)
+adonis_res <- adonis2(
+  dist_paired ~ social_position + clutch_ID + size_ratio,
+  data         = meta_paired,
+  permutations = perm_ctrl,
+  by           = "margin"    # each term tested after accounting for all others
+)
+
+print(adonis_res)
+# Permutation test for adonis under reduced model
+# Marginal effects of terms
+# Plots: meta_paired$pair_ID, plot permutation: free
+# Permutation: none
+# Number of permutations: 999
+# 
+# adonis2(formula = dist_paired ~ social_position + clutch_ID + size_ratio, data = meta_paired, permutations = perm_ctrl, by = "margin")
+# Df SumOfSqs      R2      F Pr(>F)  
+# social_position  1    78.21 0.16513 5.7753  0.361  
+# clutch_ID        2    42.16 0.08901 1.5566  0.062 .
+# size_ratio       1     8.76 0.01851 0.6472  0.844  
+# Residual        25   338.54 0.71481                
+# Total           29   473.60 1.00000                
+# ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+# Format p-values (999 permutations → minimum p = 0.001)
+format_p <- function(p, nperm = 999) {
+  min_p <- 1 / (nperm + 1)
+  if (!is.na(p) && p <= min_p) {
+    paste0("< ", formatC(min_p, digits = 3, format = "f"))
+  } else {
+    formatC(p, digits = 3, format = "f")
+  }
+}
+
+p_social <- adonis_res["social_position", "Pr(>F)"]
+p_clutch <- adonis_res["clutch_ID",       "Pr(>F)"]
+p_ratio  <- adonis_res["size_ratio",      "Pr(>F)"]
+
+pval_label <- paste0(
+  "Social position : p = ", format_p(p_social), "\n",
+  "Clutch ID       : p = ", format_p(p_clutch), "\n",
+  "Size ratio      : p = ", format_p(p_ratio)
+)
+
+# PCA — P1 + P2, colored by size_ratio
+
+pca_p    <- prcomp(t(scaled_paired), center = TRUE, scale. = FALSE)
+pctVar_p <- round(100 * pca_p$sdev^2 / sum(pca_p$sdev^2), 1)
+pca_df_p <- cbind(as.data.frame(pca_p$x), meta_paired)
+
+clutch_shapes <- c(L2 = 22, L3 = 21, L6 = 24)        # square, circle, triangle
+social_colors <- c(P1 = "magenta3", P2 = "purple3")   # border color
+
+# Sharp black → red step at exactly 0.8
+# values must be in [0,1], so rescale 0.8 relative to data range
+min_r <- min(pca_df_p$size_ratio, na.rm = TRUE)
+max_r <- max(pca_df_p$size_ratio, na.rm = TRUE)
+bp    <- (0.8 - min_r) / (max_r - min_r)   # position of 0.8 rescaled to [0,1]
+eps   <- 0.001                              # tiny gap to create a hard step
+
+# Ensure factors are ordered for consistent legend
+meta_paired$social_position <- factor(meta_paired$social_position, levels = c("P1", "P2"))
+meta_paired$clutch_ID       <- factor(meta_paired$clutch_ID,       levels = c("L2", "L3", "L6"))
+pca_df_p$social_position    <- factor(pca_df_p$social_position,    levels = c("P1", "P2"))
+pca_df_p$clutch_ID          <- factor(pca_df_p$clutch_ID,          levels = c("L2", "L3", "L6"))
+
+
+pca_plot_p_app <- ggplot(pca_df_p,
+                     aes(x     = PC1,
+                         y     = PC2,
+                         fill  = size_ratio,     # point interior = size ratio
+                         color = social_position, # point border  = social position
+                         shape = clutch_ID)) +    # shape          = clutch ID
+  stat_ellipse(
+      aes(x      = PC1,
+          y      = PC2,
+          colour = social_position),   # only what you need
+    inherit.aes  = FALSE, 
+    type         = "t",
+    level        = 0.95,
+    alpha        = 0.8,
+    linewidth    = 2,       # 'size' deprecated in ggplot2 >= 3.4.0; use linewidth
+    show.legend  = FALSE
+  ) +
+  geom_point(size = 4, stroke = 1.5) +
+  # Fill: sharp black → red at 0.8, continuous colorbar
+  scale_fill_gradientn(
+    colors = c("black", "black", "red",        "red"),
+    values = c(0,        max(bp - eps, 0),
+               min(bp + eps, 1), 1),
+    limits = c(min_r, max_r),
+    name   = "size ratio\n(P2/P1)",
+    guide  = guide_colorbar(
+      frame.colour = "grey40",
+      ticks.colour = "grey40",
+      barwidth     = 1,
+      barheight    = 7
+    )
+  ) +
+  # Color (border): social position
+  scale_color_manual(
+    values = social_colors,
+    name   = "social position"
+  ) +
+  # Shape: clutch ID (fillable shapes only: 21/22/24)
+  scale_shape_manual(
+    values = clutch_shapes,
+    name   = "clutch ID"
+  ) +
+  xlab(paste0("PC1 (", pctVar_p[1], "%)")) +
+  ylab(paste0("PC2 (", pctVar_p[2], "%)")) +
+  # PERMANOVA p-values → bottom right corner
+  annotate(
+    "text",
+    x          = Inf,  y = -Inf,
+    label      = pval_label,
+    hjust      = 1,    vjust = -0.2, # adjust vertical position to avoid overlap with axes
+    size       = 3.5,
+    lineheight = 1,
+    fontface   = "plain"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    legend.position = "right",
+    legend.text      = element_text(size = 8),
+    legend.title     = element_text(size = 9),
+    legend.spacing.y    = unit(0.01, "cm"),
+    legend.key      = element_blank()   # remove grey box around shapes in legend
+  )
+
+print(pca_plot_p_app)
+ggsave(pca_plot_p_app, filename = "../Figures/PCA_heatmap_AppetiteKrebsGlycolysis_P1P2_size_ratio_20260410.pdf", width = 10, height = 8, dpi = 1200)
+ggsave(pca_plot_p_app, filename = "../Figures/PCA_heatmap_AppetiteKrebsGlycolysis_P1P2_size_ratio_20260410.png", width = 10, height = 8, dpi = 1200)
+
+
+
+library(cowplot) 
+
+#taking figures made in WGCNA_script 
+#line 1544 - pca_plot_p_growth 
+#line 1355 - pca_plot_all_growth
+#making several combinations of these figures and the above figures
+
+#combine the two PCA plots into one figure
+#COMBINING ALL 45 SAMPLE PCA PLOTS OF MAIN FIGURE 5 AND 6 
+legend_reg <- legend <- get_legend(pca_plot_all_app)
+combined_pca_genes_fig5_6 <- plot_grid(pca_plot_all_growth + theme(legend.position = "none"),
+                                       pca_plot_all_app + theme(legend.position = "none"),
+                                       legend_reg,
+                               labels = c("A", "B", ""),
+                               label_size = 16,
+                               ncol = 3,
+                               rel_widths = c(1, 1, 0.15))
+combined_pca_genes_fig5_6
+ggsave("../Figures/combined_pca_genes_fig5_6_20260410_v2.png", combined_pca_genes_fig5_6, width = 19, height = 8, dpi = 1200)
+
+#COMBINING P1+P2 SIZE RATIO PCA PLOTS OF SUPPLEMENTARY FIGURES
+legend_size <- legend <- get_legend(pca_plot_p_app)
+combined_pca_genes_fig5_6_wsizeratio <- plot_grid(pca_plot_p_growth + theme(legend.position = "none"),
+                                       pca_plot_p_app + theme(legend.position = "none"), 
+                                       legend_size,
+                                       labels = c("A", "B", ""),
+                                       label_size = 16,
+                                       ncol = 3,
+                                       rel_widths = c(1, 1, 0.15))
+combined_pca_genes_fig5_6_wsizeratio
+ggsave("../Figures/combined_pca_genes_fig5_6wsizeratio_20260410_v2.png", combined_pca_genes_fig5_6_wsizeratio, width = 19, height = 8, dpi = 1200)
+
+
+
+#########
+# ── Define colors and shapes ───────────────────────────────────────────────────
+color_scheme  <- c("magenta3", "purple3", "grey50")
+shapes        <- c(15, 16, 17)
+social_fills  <- setNames(color_scheme, c("P1", "P2", "S"))
+clutch_shapes <- setNames(c(22, 21, 24), c("L2", "L3", "L6"))
+
+format_p <- function(p) {
+  if (is.na(p))   return("p = NA")
+  if (p < 0.001)  return("p < 0.001")
+  paste0("p = ", round(p, 3))
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 1: All 45 samples — social position + clutch ID
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Step 1: Metadata for all 45 samples ───────────────────────────────────────
+sample_meta_all <- data.frame(
+  sampleID        = colnames(expr_mat),
+  social_position = annotation_col$social_position,
+  clutch_ID       = annotation_col$clutch_ID,
+  row.names       = colnames(expr_mat)
+)
+
+# ── Step 2: Scale and PCA — all 45 ────────────────────────────────────────────
+expr_scaled_all <- scale(t(expr_mat))
+
+pca_res_all     <- prcomp(expr_scaled_all, center = FALSE, scale. = FALSE)
+pca_scores_all  <- as.data.frame(pca_res_all$x)
+pca_scores_all  <- cbind(pca_scores_all, sample_meta_all)
+
+percentVar_all  <- round(100 * pca_res_all$sdev^2 / sum(pca_res_all$sdev^2), 1)
+
+# ── Step 3: PERMANOVA — all 45 ────────────────────────────────────────────────
+dist_all <- dist(expr_scaled_all, method = "euclidean")
+
+perm_all <- adonis2(
+  dist_all ~ social_position + clutch_ID,
+  data         = sample_meta_all,
+  by           = "margin",
+  permutations = 999
+)
+print(perm_all)
+
+
+p_social_all  <- perm_all["social_position", "Pr(>F)"]
+p_clutch_all  <- perm_all["clutch_ID",       "Pr(>F)"]
+r2_social_all <- round(perm_all["social_position", "R2"], 3)
+r2_clutch_all <- round(perm_all["clutch_ID",       "R2"], 3)
+
+label_text_all <- paste0(
+  "Social position: ", format_p(p_social_all), ", R² = ", r2_social_all, "\n",
+  "Clutch ID: ",       format_p(p_clutch_all), ", R² = ", r2_clutch_all
+)
+
+# ── Step 4: PCA plot — all 45 ─────────────────────────────────────────────────
+pca_plot_all <- ggplot(pca_scores_all, aes(x = PC1, y = PC2)) +
+  
+  stat_ellipse(data = pca_scores_all[pca_scores_all$social_position == "P1", ],
+               color = "magenta3", level = 0.95, linewidth = 0.8) +
+  stat_ellipse(data = pca_scores_all[pca_scores_all$social_position == "P2", ],
+               color = "purple3",  level = 0.95, linewidth = 0.8) +
+  stat_ellipse(data = pca_scores_all[pca_scores_all$social_position == "S", ],
+               color = "grey50",   level = 0.95, linewidth = 0.8) +
+  
+  geom_point(
+    aes(fill  = social_position,
+        shape = clutch_ID),
+    color  = "black",              # ← simple black border for all
+    size   = 5,
+    stroke = 1,
+    alpha  = 0.9
+  ) +
+  
+  # ── Clutch ID as text label inside point ────────────────────────────────────
+  geom_text(
+    aes(label = clutch_ID),
+    size     = 2.5,
+    color    = "white",
+    fontface = "bold"
+  ) +
+  
+  scale_fill_manual(
+    values = social_fills,
+    name   = "Social position"
+  ) +
+  scale_shape_manual(
+    values = clutch_shapes,
+    name   = "Clutch ID"
+  ) +
+  
+  guides(
+    fill = guide_legend(
+      title.theme = element_text(size = 12, face = "bold"),
+      label.theme = element_text(size = 11),
+      override.aes = list(
+        fill  = c("magenta3", "purple3", "grey50"),
+        color = "black", shape = 21, size = 5)
+    ),
+    shape = guide_legend(
+      title.theme = element_text(size = 12, face = "bold"),
+      label.theme = element_text(size = 11),
+      override.aes = list(
+        fill = "grey70", color = "black", size = 5)
+    )
+  ) +
+  
+  annotate("label",
+           x = Inf, y = -Inf, label = label_text_all,
+           hjust = 1.05, vjust = -0.2, size = 3.5,
+           fill = "white", label.size = 0.3) +
+  
+  labs(
+    x = paste0("PC1 (", percentVar_all[1], "% variance)"),
+    y = paste0("PC2 (", percentVar_all[2], "% variance)")
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    panel.grid       = element_blank(),
+    axis.line        = element_line(color = "black", linewidth = 0.5),
+    axis.text        = element_text(size = 13),
+    axis.title       = element_text(size = 14),
+    legend.title     = element_text(size = 12, face = "bold"),
+    legend.text      = element_text(size = 11),
+    legend.key.size  = unit(0.5, "cm"),
+    plot.background  = element_rect(fill = "white", color = NA)
+  )
+
+pca_plot_all
+
+ggsave("../Figures/PCA_all45_socialposition_clutchID.pdf",
+       plot = pca_plot_all, width = 8, height = 6, units = "in")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 2: P1 and P2 only — social position + clutch ID + size ratio
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Step 5: Subset expression matrix to P1 and P2 ─────────────────────────────
+paired_idx    <- annotation_col$social_position %in% c("P1", "P2")
+expr_mat_p12  <- expr_mat[, paired_idx]                 # ← subset heatmap matrix
+
+# ── Step 6: Metadata for P1 and P2 only ───────────────────────────────────────
+sample_meta_p12 <- data.frame(
+  sampleID        = colnames(expr_mat_p12),
+  social_position = annotation_col$social_position[paired_idx],
+  clutch_ID       = annotation_col$clutch_ID[paired_idx],
+  size_ratio      = sorted_size_ratio$final_size_ratio[paired_idx],
+  row.names       = colnames(expr_mat_p12)
+)
+
+# ── Step 7: Categorize size ratio ─────────────────────────────────────────────
+sample_meta_p12$size_ratio_cat <- factor(
+  ifelse(sample_meta_p12$size_ratio <= 0.8,  "≤ 0.8",
+         ifelse(sample_meta_p12$size_ratio <  0.99, "> 0.8 & < 0.99", "= 1")),
+  levels = c("≤ 0.8", "> 0.8 & < 0.99", "= 1")
+)
+
+# ── Step 8: Scale and PCA — P1 and P2 ─────────────────────────────────────────
+expr_scaled_p12 <- scale(t(expr_mat_p12))
+
+pca_res_p12     <- prcomp(expr_scaled_p12, center = FALSE, scale. = FALSE)
+pca_scores_p12  <- as.data.frame(pca_res_p12$x)
+pca_scores_p12  <- cbind(pca_scores_p12, sample_meta_p12)
+
+percentVar_p12  <- round(100 * pca_res_p12$sdev^2 / sum(pca_res_p12$sdev^2), 1)
+
+# ── Step 9: PERMANOVA — P1 and P2 ─────────────────────────────────────────────
+dist_p12 <- dist(expr_scaled_p12, method = "euclidean")
+
+perm_p12 <- adonis2(
+  dist_p12 ~ social_position + clutch_ID + size_ratio,
+  data         = sample_meta_p12,
+  by           = "margin",
+  permutations = 999
+)
+print(perm_p12)
+
+p_social_p12  <- perm_p12["social_position", "Pr(>F)"]
+p_clutch_p12  <- perm_p12["clutch_ID",       "Pr(>F)"]
+p_ratio_p12   <- perm_p12["size_ratio",      "Pr(>F)"]
+r2_social_p12 <- round(perm_p12["social_position", "R2"], 3)
+r2_clutch_p12 <- round(perm_p12["clutch_ID",       "R2"], 3)
+r2_ratio_p12  <- round(perm_p12["size_ratio",      "R2"], 3)
+
+label_text_p12 <- paste0(
+  "Social position: ", format_p(p_social_p12), ", R² = ", r2_social_p12, "\n",
+  "Clutch ID: ",       format_p(p_clutch_p12), ", R² = ", r2_clutch_p12, "\n",
+  "Size ratio: ",      format_p(p_ratio_p12),  ", R² = ", r2_ratio_p12
+)
+
+# ── Step 10: Border colors for size ratio ─────────────────────────────────────
+border_colors <- c(
+  "≤ 0.8"          = "black",
+  "> 0.8 & < 0.99" = "red",
+  "= 1"            = "grey70"
+)
+
+# ── Step 11: PCA plot — P1 and P2 ─────────────────────────────────────────────
+pca_plot_p12 <- ggplot(pca_scores_p12, aes(x = PC1, y = PC2)) +
+  
+  stat_ellipse(data = pca_scores_p12[pca_scores_p12$social_position == "P1", ],
+               color = "magenta3", level = 0.95, linewidth = 0.8) +
+  stat_ellipse(data = pca_scores_p12[pca_scores_p12$social_position == "P2", ],
+               color = "purple3",  level = 0.95, linewidth = 0.8) +
+  
+  geom_point(
+    aes(fill  = social_position,
+        color = size_ratio_cat,
+        shape = clutch_ID),
+    size   = 5,
+    stroke = 1.5,
+    alpha  = 0.9
+  ) +
+  
+  geom_text(
+    aes(label = clutch_ID),
+    size     = 2.5,
+    color    = "white",
+    fontface = "bold"
+  ) +
+  
+  scale_fill_manual(
+    values = c(P1 = "magenta3", P2 = "purple3"),
+    name   = "Social position"
+  ) +
+  scale_color_manual(
+    values = border_colors,
+    name   = "Size ratio"
+  ) +
+  scale_shape_manual(
+    values = clutch_shapes,
+    name   = "Clutch ID"
+  ) +
+  
+  guides(
+    fill = guide_legend(
+      title.theme = element_text(size = 12, face = "bold"),
+      label.theme = element_text(size = 11),
+      override.aes = list(
+        fill  = c("magenta3", "purple3"),
+        color = "white", shape = 21, size = 5)
+    ),
+    color = guide_legend(
+      title.theme = element_text(size = 12, face = "bold"),
+      label.theme = element_text(size = 11),
+      override.aes = list(
+        shape = NA, linetype = 1, linewidth = 1.5,
+        color = c("black", "red", "grey70"))
+    ),
+    shape = guide_legend(
+      title.theme = element_text(size = 12, face = "bold"),
+      label.theme = element_text(size = 11),
+      override.aes = list(
+        fill = "grey70", color = "black", size = 5)
+    )
+  ) +
+  
+  annotate("label",
+           x = Inf, y = -Inf, label = label_text_p12,
+           hjust = 1.05, vjust = -0.2, size = 3.5,
+           fill = "white", label.size = 0.3) +
+  
+  labs(
+    x = paste0("PC1 (", percentVar_p12[1], "% variance)"),
+    y = paste0("PC2 (", percentVar_p12[2], "% variance)")
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    panel.grid       = element_blank(),
+    axis.line        = element_line(color = "black", linewidth = 0.5),
+    axis.text        = element_text(size = 13),
+    axis.title       = element_text(size = 14),
+    legend.title     = element_text(size = 12, face = "bold"),
+    legend.text      = element_text(size = 11),
+    legend.key.size  = unit(0.5, "cm"),
+    plot.background  = element_rect(fill = "white", color = NA)
+  )
+
+pca_plot_p12
+
+ggsave("../Figures/PCA_P1P2_socialposition_clutchID_sizeratio.pdf",
+       plot = pca_plot_p12, width = 8, height = 6, units = "in")
+
+
+
+
+
+
+
 
 ##########further exploration###################
 ##### Other metabolism and digestion genes######

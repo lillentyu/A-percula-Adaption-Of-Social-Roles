@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(dplyr)
-library(arrayQualityMetrics) # need special install above
+#library(arrayQualityMetrics) # need special install above
 library(ggplot2)
 library(readr)
 library(plotly)
@@ -31,7 +31,7 @@ library(WGCNA)
 library(gridExtra)
 ###conduct array quality metrics to detect and remove outliers
 #library(affycoretools)
-library(genefilter)
+#library(genefilter)
 library(Biobase)
 library(gridExtra)
 
@@ -257,6 +257,9 @@ pca_df$clutch_ID <- colData(vsd)$clutch_ID
 percentVar <- round(100 * pca_res$sdev^2 / sum(pca_res$sdev^2), 1)
 
 color_scheme <- c("magenta3", "purple3", "grey50")
+shapes <- c(15,  16,  17)
+
+
 
 ## Plot PCA (PCA1 vs PCA2)
 ggplot(pca_df, aes(x = PC1, y = PC2, color = fish_type2)) +
@@ -271,8 +274,70 @@ ggplot(pca_df, aes(x = PC1, y = PC2, color = fish_type2)) +
 
 #ggsave("../Figures/PCA_PC1_vs_PC2_all_genes_prcomp.png", width = 10, height = 8, dpi = 1200)
 
-color_scheme <- c("magenta3", "purple3", "grey50")
-shapes <- c(15,  16,  17)
+## Plot PCA (PC1 vs PC2) - manuscript version (supplements)
+pca_plot12 <- ggplot(pca_df, aes(x = PC1, y = PC2, color = fish_type2)) +
+  geom_point(size = 5, aes(shape = clutch_ID), alpha = 0.8) +
+  stat_ellipse(geom = "polygon", aes(colour = fish_type2), 
+               fill = NA, type = "t", level = 0.95, alpha = 0.2, size = 2,
+               show.legend = FALSE) +
+  xlab(paste0("PC1 (", percentVar[1], "%)")) +
+  ylab(paste0("PC2 (", percentVar[2], "%)")) +
+  scale_color_manual(name = "social position", values = color_scheme) +
+  scale_shape_manual(name = "clutch ID", values = shapes) +
+  annotate("text", x = Inf, y = -Inf,                    #bottom right: Inf, y = -Inf, hjust = 1.1, vjust = -0.5
+           label = "ADONIS p(social position) = 0.004",
+           hjust = 1.1, vjust = -0.5, 
+           size = 4, fontface = "italic") +
+  #ggtitle("PCA (PC1 vs PC2) all genes prcomp") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size = 13),
+        legend.text = element_text(size = 13),
+        legend.position = c(0.09, 0.18))
+#ggsave("../Figures/PCA_PC1_vs_PC2_all_genes_prcomp.pdf", width = 10, height = 8, dpi = 1200)
+#ggsave("../Figures/PCA_PC1_vs_PC2_all_genes_prcomp.png", width = 10, height = 8, dpi = 1200)
+
+
+## PERMANOVA test on PCA 1 and PCA 2
+pca_matrix_pc1_pc2 <- pca_df[, c("PC1", "PC2")]
+adonis_res_pc1_pc2 <- adonis2(pca_matrix_pc1_pc2 ~ fish_type2 + clutch_ID, 
+                              data = pca_df, 
+                              method = "euclidean", 
+                              permutations = 999)
+print(adonis_res_pc1_pc2)
+
+#Permutation test for adonis under reduced model
+#Terms added sequentially (first to last)
+#Permutation: free
+#Number of permutations: 999
+
+#adonis2(formula = pca_matrix_pc1_pc2 ~ fish_type2 + clutch_ID, data = pca_df, permutations = 999, method = "euclidean")
+#           Df SumOfSqs      R2      F Pr(>F)   
+#fish_type2  2   4305.4 0.15859 4.1744  0.004 **
+#clutch_ID   2   2214.1 0.08156 2.1467  0.083 . 
+#Residual   40  20627.8 0.75985                 
+#Total      44  27147.2 1.00000                 
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+
+```
+
+
+
+
+```{r #PCA - PC2&PC3 - main text PCA plot}
+
+p_val <- adonis_res["fish_type2", "Pr(>F)"]
+p_label <- if (is.na(p_val)) {
+  "ADONIS p(social position) = NA"
+} else if (p_val < 0.001) {
+  "ADONIS p(social position) < 0.001"
+} else {
+  sprintf("ADONIS p(social position) = %.3f", p_val)
+}
 
 # Plot PCA (PC2 vs PC3)
 pca_plot <- ggplot(pca_df, aes(x = PC2, y = PC3, color = fish_type2)) +
@@ -299,32 +364,22 @@ pca_plot <- ggplot(pca_df, aes(x = PC2, y = PC3, color = fish_type2)) +
   ylab(paste0("PC3 (", percentVar[3], "%)")) +
   scale_color_manual(name = "social position", values = color_scheme) +
   scale_shape_manual(name = "clutch ID", values = shapes) +  # Specify shape values
+  annotate("text", x = Inf, y = -Inf,                    #bottom right: Inf, y = -Inf, hjust = 1.1, vjust = -0.5
+           label = "ADONIS p(social position) = 0.003",
+           hjust = 1.1, 
+           vjust = -0.5, 
+           size = 4, fontface = "italic") +
   #ggtitle("PCA (PC2 vs PC3) all genes prcomp") +
   theme_classic() +
-  theme(axis.text = element_text(size = 16), axis.title = element_text(size = 16),         legend.title=element_text(size=13),  legend.text=element_text(size=13), legend.position = c(0.09,0.18))
-#ggsave("../Figures/PCA_PC2_vs_PC3_all_genes_prcomp.png", width = 10, height = 8, dpi = 1200)
+  theme(axis.text = element_text(size = 16), 
+        axis.title = element_text(size = 16),         
+        legend.title=element_text(size=13),  
+        legend.text=element_text(size=13), legend.position = c(0.09,0.1))
 
+pca_plot <- pca_plot + labs(tag = "A")+  # Add tag "A" to the plot
+          theme(plot.tag = element_text(size = 16, face = "bold"))  # Adjust tag size and style
 
-
-## PERMANOVA test on PCA 1 and PCA 2
-pca_matrix_pc1_pc2 <- pca_df[, c("PC1", "PC2")]
-adonis_res_pc1_pc2 <- adonis2(pca_matrix_pc1_pc2 ~ fish_type2 + clutch_ID, data = pca_df, method = "euclidean", permutations = 999)
-print(adonis_res_pc1_pc2)
-
-#Permutation test for adonis under reduced model
-#Terms added sequentially (first to last)
-#Permutation: free
-#Number of permutations: 999
-
-#adonis2(formula = pca_matrix_pc1_pc2 ~ fish_type2 + clutch_ID, data = pca_df, permutations = 999, method = "euclidean")
-#           Df SumOfSqs      R2      F Pr(>F)   
-#fish_type2  2   4305.4 0.15859 4.1744  0.004 **
-#clutch_ID   2   2214.1 0.08156 2.1467  0.083 . 
-#Residual   40  20627.8 0.75985                 
-#Total      44  27147.2 1.00000                 
-#---
-#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-
+ggsave("../Figures/PCA_PC2_vs_PC3_all_genes_prcomp20260507.png", width = 10, height = 8, dpi = 1200)
 
 
 ## PERMANOVA on PCA 2 and PCA 3 
@@ -347,13 +402,400 @@ print(adonis_res)
 #Total      44  16445.5 1.00000                 
 #---
 #Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+#supplementary version of this figure:
+pca_df$sample <- rownames(pca_df)
+
+library(ggrepel)
+
+pca_df$sample <- rownames(pca_df)
+
+pca_plot_names <- ggplot(pca_df, aes(x = PC2, y = PC3, color = fish_type2)) +
+            geom_point(size = 5, alpha = 0.8) +
+            geom_text_repel(aes(label = sample),
+            size = 3.5,
+            box.padding = 0.35,
+            point.padding = 0.3,
+            segment.size = 0.2,
+            max.overlaps = Inf) +    # set a large value or remove in older ggrepel
+            stat_ellipse(geom = "polygon", aes(colour = fish_type2),
+            fill = NA, type = "t", level = 0.95, alpha = 0.2, size= 2,
+            show.legend = FALSE) +
+            xlab(paste0("PC2 (", percentVar[2], "%)")) +
+            ylab(paste0("PC3 (", percentVar[3], "%)")) +
+            scale_color_manual(name = "social position", values = color_scheme) +
+            annotate("text", x = Inf, y = -Inf,
+            label = "ADONIS p(social position) = 0.003",
+            hjust = 1.1, vjust = -0.5, size = 4, fontface = "italic") +
+            theme_classic() +
+            theme(axis.text = element_text(size = 16),
+            axis.title = element_text(size = 16),
+            legend.title=element_text(size=13),
+            legend.text=element_text(size=13),
+            legend.position = c(0.09,0.1)) +
+            labs(tag = "A") +
+            theme(plot.tag = element_text(size = 16, face = "bold"))
+
+ggsave("../Figures/PCA_PC2_vs_PC3_all_genes_prcomp_wnames_20260507.png",pca_plot_names, width = 10, height = 8, dpi = 1200)
+ggsave("../Figures/PCA_PC2_vs_PC3_all_genes_prcomp_wnames_20260507.svg",pca_plot_names, width = 10, height = 8, dpi = 1200)
+
+library(dplyr)
+library(ggrepel)   # optional, for non-overlapping labels
+library(ggplot2)
+
+# Make sample column from rownames
+pca_df1 <- pca_df %>% mutate(sample = rownames(pca_df))
+
+# Extract numeric ID shared by P1/P2/S (adjust regex if needed)
+# This assumes sample names start with digits like "10P1", "10P2", "10S", or contain the number at start.
+pca_df1 <- pca_df1 %>% mutate(pair_id = sub("^([0-9]+).*", "\\1", sample))
+
+# Ensure pca_df1 is a data.frame
+pca_df1 <- as.data.frame(pca_df1)
+
+# Optionally keep only IDs that have at least 2 or 3 samples (here >=2)
+pair_counts <- pca_df1 %>% count(pair_id)
+valid_pairs <- pair_counts %>% filter(n >= 2) %>% pull(pair_id)
+pca_df_pairs <- pca_df1 
+
+# For consistent line ordering, decide on an ordering variable within each pair.
+# For a smooth visual, order by PC2 (or PC1). Create an "order" column per pair.
+pca_df_pairs <- pca_df_pairs %>%
+  group_by(pair_id) %>%
+  arrange(PC2, .by_group = TRUE) %>%    # change to arrange(PC1, .by_group = TRUE) if preferred
+  mutate(pt_order = row_number()) %>%
+  ungroup()
+
+# Plot: draw lines connecting all samples that share pair_id, then points on top
+pca_plot_pairs <- ggplot() +
+  # lines connecting the groups (use pca_df_pairs)
+  geom_line(data = pca_df_pairs,
+            aes(x = PC2, y = PC3, group = pair_id),
+            color = "black", alpha = 0.6, size = 0.8) +
+  # optional: show a point at each sample
+  geom_point(data = pca_df1,
+             aes(x = PC2, y = PC3, color = fish_type2, shape = clutch_ID),
+             size = 4, alpha = 0.9) +
+  # optional: add labels (uncomment if needed)
+  geom_text_repel(data = pca_df, aes(x = PC2, y = PC3, label = sample, color = fish_type2),
+                   size = 3.0, box.padding = 0.3, point.padding = 0.2, segment.size = 0.2) +
+  stat_ellipse(data = pca_df1, aes(x = PC2, y = PC3, colour = fish_type2),
+               fill = NA, type = "t", level = 0.95, alpha = 0.8, size = 1.5, show.legend = FALSE) +
+  xlab(paste0("PC2 (", percentVar[2], "%)")) +
+  ylab(paste0("PC3 (", percentVar[3], "%)")) +
+  scale_color_manual(name = "social position", values = color_scheme) +
+  scale_shape_manual(name = "clutch ID", values = shapes) +
+  theme_classic() +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 14),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 11),
+        legend.position = c(0.09, 0.18))
+
+# Add tag and ADONIS label if desired (example)
+p_label <- "ADONIS p(social position) = 0.003"
+pca_plot_pairs <- pca_plot_pairs +
+  annotate("text", x = Inf, y = -Inf, label = p_label,
+           hjust = 1.02, vjust = -0.2, size = 4, fontface = "italic") +
+  #labs(tag = "A") +
+  theme(plot.tag = element_text(size = 16, face = "bold"))
+
+# Save
+ggsave("../Figures/PCA_PC2_vs_PC3_with_pairs.svg",pca_plot_pairs, width = 10, height = 8, dpi = 1200)
+ggsave("../Figures/PCA_PC2_vs_PC3_with_pairs.png",pca_plot_pairs, width = 10, height = 8, dpi = 1200)
+```
+
+```{r #PCA - PC1&PC3}
+
+## Plot PCA (PC1 vs PC3) - manuscript version supplements
+pca_plot13 <- ggplot(pca_df, aes(x = PC1, y = PC3, color = fish_type2)) +
+  geom_point(size = 5, aes(shape = clutch_ID), alpha = 0.8) +
+  stat_ellipse(geom = "polygon", aes(colour = fish_type2), 
+               fill = NA, type = "t", level = 0.95, alpha = 0.2, size = 2,
+               show.legend = FALSE) +
+  xlab(paste0("PC1 (", percentVar[1], "%)")) +
+  ylab(paste0("PC3 (", percentVar[3], "%)")) +
+  scale_color_manual(name = "social position", values = color_scheme) +
+  scale_shape_manual(name = "clutch ID", values = shapes) +
+  annotate("text", x = Inf, y = -Inf,                    #bottom right: Inf, y = -Inf, hjust = 1.1, vjust = -0.5
+            label = "ADONIS p(social position) = 0.5",
+           hjust = 1.1, vjust = -0.5, 
+           size = 4.5, fontface = "italic") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 16),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 11),
+        legend.position = c(0.07, 0.18))
+
+ggsave("../Figures/PCA_PC1_vs_PC3_all_genes_prcomp.png", width = 10, height = 8, dpi = 1200)
+
+# PERMANOVA on PCA 1 and PCA 3
+pca_matrix_pc1_pc3 <- pca_df[, c("PC1", "PC3")]
+adonis_res_pc1_pc3 <- adonis2(pca_matrix_pc1_pc3 ~ fish_type2 + clutch_ID, 
+                               data = pca_df, 
+                               method = "euclidean", 
+                               permutations = 999,
+                               by = "margin")   # <-- add this
+print(adonis_res_pc1_pc3)
+
+#Permutation test for adonis under reduced model
+#Marginal effects of terms
+#Permutation: free
+#Number of permutations: 999
+
+#adonis2(formula = pca_matrix_pc1_pc3 ~ fish_type2 + clutch_ID, data = pca_df, permutations = 999, method = "euclidean", by = "margin")
+#           Df SumOfSqs      R2      F Pr(>F)  
+#fish_type2  2    762.4 0.03165 0.7348  0.553  
+#clutch_ID   2   2388.7 0.09915 2.3021  0.071 .
+#Residual   40  20752.6 0.86142                
+#Total      44  24091.3 1.00000                
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+```
+
+
+```{r supplements PCA figure combined}
+#Combine PCA plots into one figure for supplements (PC1 vs PC2 and PC1 vs PC3)
+library(cowplot)
+combined_pca_plot <- plot_grid(pca_plot12, pca_plot13, 
+                                labels = c("A", "B"),
+                                label_size = 16,
+                                ncol = 2)
+ggsave("../Figures/combined_PCA_12and13_plots.png", combined_pca_plot, width = 19, height = 8, dpi = 1200)
+```
+
+
+```{r}
+# ============================================================
+# PCA — all genes, top 50%, 25%, and 5% most variable genes
+# ============================================================
+library(ggplot2)
+library(patchwork)
+library(vegan)      # for adonis2
+
+gene_var    <- apply(pca_data_all, 1, var)
+total_genes <- nrow(pca_data_all)
+
+color_scheme <- c("magenta3", "purple3", "grey50")
+shapes <- c(15,  16,  17)
+
+cat("Total genes:", total_genes, "\n")
+cat("Top 50%:",  round(total_genes * 0.50), "genes\n")
+cat("Top 25%:",  round(total_genes * 0.25), "genes\n")
+cat("Top  5%:",  round(total_genes * 0.05), "genes\n")
+
+# ============================================================
+# Function: run PCA
+# ============================================================
+run_pca <- function(expr_mat, top_percent, vsd_obj) {
+  n_genes    <- round(nrow(expr_mat) * top_percent)
+  top_genes  <- names(sort(gene_var, decreasing = TRUE))[1:n_genes]
+  subset_mat <- expr_mat[top_genes, ]
+
+  pca_res <- prcomp(t(subset_mat), center = TRUE, scale. = FALSE)
+
+  pca_df <- as.data.frame(pca_res$x[, 1:3])
+  pca_df$fish_type2 <- colData(vsd_obj)$fish_type2
+  pca_df$clutch_ID  <- colData(vsd_obj)$clutch_ID
+
+  percentVar <- round(100 * pca_res$sdev^2 / sum(pca_res$sdev^2), 1)
+
+  list(pca_df = pca_df, percentVar = percentVar, n_genes = n_genes)
+}
+
+# ============================================================
+# Function: run PERMANOVA on two PC axes, return fish_type2 p-value
+# ============================================================
+run_adonis <- function(pca_obj, pcx, pcy) {
+  df         <- pca_obj$pca_df
+  pca_matrix <- df[, c(pcx, pcy)]
+
+  adonis_res <- adonis2(pca_matrix ~ fish_type2 + clutch_ID,
+                        data         = df,
+                        method       = "euclidean",
+                        permutations = 999,
+                        by           = "margin")
+
+  p_val <- adonis_res["fish_type2", "Pr(>F)"]
+  return(p_val)
+}
+
+# ============================================================
+# Helper: format p-value for annotation
+# ============================================================
+format_pval <- function(p) {
+  if (is.na(p)) return("ADONIS p(social position) = NA")
+  if (p < 0.001) return("ADONIS p(social position) < 0.05")
+  paste0("ADONIS p(social position) = ", round(p, 3))
+}
+
+# ============================================================
+# Run PCA for every gene subset
+# ============================================================
+pca_all <- run_pca(pca_data_all, 1.00, vsd)
+pca_50  <- run_pca(pca_data_all, 0.50, vsd)
+pca_25  <- run_pca(pca_data_all, 0.25, vsd)
+pca_05  <- run_pca(pca_data_all, 0.05, vsd)
+
+# ============================================================
+# Run PERMANOVA for all 12 combinations
+# ============================================================
+cat("Running PERMANOVA for all 12 PC combinations...\n")
+
+# All genes
+pval_all_12 <- run_adonis(pca_all, "PC1", "PC2")
+pval_all_23 <- run_adonis(pca_all, "PC2", "PC3")
+pval_all_13 <- run_adonis(pca_all, "PC1", "PC3")
+
+# Top 50%
+pval_50_12  <- run_adonis(pca_50,  "PC1", "PC2")
+pval_50_23  <- run_adonis(pca_50,  "PC2", "PC3")
+pval_50_13  <- run_adonis(pca_50,  "PC1", "PC3")
+
+# Top 25%
+pval_25_12  <- run_adonis(pca_25,  "PC1", "PC2")
+pval_25_23  <- run_adonis(pca_25,  "PC2", "PC3")
+pval_25_13  <- run_adonis(pca_25,  "PC1", "PC3")
+
+# Top 5%
+pval_05_12  <- run_adonis(pca_05,  "PC1", "PC2")
+pval_05_23  <- run_adonis(pca_05,  "PC2", "PC3")
+pval_05_13  <- run_adonis(pca_05,  "PC1", "PC3")
+
+cat("PERMANOVA complete.\n")
+
+# ============================================================
+# Function: make PCA plot with PERMANOVA p-value annotation
+# ============================================================
+make_pca_plot <- function(pca_obj, pcx, pcy, p_val) {
+
+  df     <- pca_obj$pca_df
+  pVar   <- pca_obj$percentVar
+  pc_idx <- as.integer(gsub("PC", "", c(pcx, pcy)))
+  label  <- format_pval(p_val)
+
+  ggplot(df, aes_string(x = pcx, y = pcy, color = "fish_type2")) +
+    geom_point(size = 5, aes(shape = clutch_ID), alpha = 0.8) +
+    stat_ellipse(geom = "polygon", aes(colour = fish_type2),
+                 fill = NA, type = "t", level = 0.95,
+                 alpha = 0.2, size = 2, show.legend = FALSE) +
+    xlab(paste0(pcx, " (", pVar[pc_idx[1]], "%)")) +
+    ylab(paste0(pcy, " (", pVar[pc_idx[2]], "%)")) +
+    scale_color_manual(name = "social position", values = color_scheme) +
+    scale_shape_manual(name = "clutch ID",        values = shapes) +
+    annotate("text",
+             x = Inf, y = -Inf,
+             label = label,
+             hjust = 1.05, vjust = -0.5,
+             size = 3.5, fontface = "italic") +
+    theme_classic() +
+    theme(axis.text    = element_text(size = 14),
+          axis.title   = element_text(size = 14),
+          legend.title = element_text(size = 12),
+          legend.text  = element_text(size = 12),
+          plot.tag     = element_text(size = 14, face = "bold"))
+}
+
+# ============================================================
+# Generate all 12 plots with unique tags A–L
+# ============================================================
+
+# Row 1 — all genes
+pAll_12 <- make_pca_plot(pca_all, "PC1", "PC2", pval_all_12) + labs(tag = "A")
+pAll_23 <- make_pca_plot(pca_all, "PC2", "PC3", pval_all_23) + labs(tag = "B")
+pAll_13 <- make_pca_plot(pca_all, "PC1", "PC3", pval_all_13) + labs(tag = "C")
+
+# Row 2 — top 50%
+p50_12  <- make_pca_plot(pca_50,  "PC1", "PC2", pval_50_12)  + labs(tag = "D")
+p50_23  <- make_pca_plot(pca_50,  "PC2", "PC3", pval_50_23)  + labs(tag = "E")
+p50_13  <- make_pca_plot(pca_50,  "PC1", "PC3", pval_50_13)  + labs(tag = "F")
+
+# Row 3 — top 25%
+p25_12  <- make_pca_plot(pca_25,  "PC1", "PC2", pval_25_12)  + labs(tag = "G")
+p25_23  <- make_pca_plot(pca_25,  "PC2", "PC3", pval_25_23)  + labs(tag = "H")
+p25_13  <- make_pca_plot(pca_25,  "PC1", "PC3", pval_25_13)  + labs(tag = "I")
+
+# Row 4 — top 5%
+p05_12  <- make_pca_plot(pca_05,  "PC1", "PC2", pval_05_12)  + labs(tag = "J")
+p05_23  <- make_pca_plot(pca_05,  "PC2", "PC3", pval_05_23)  + labs(tag = "K")
+p05_13  <- make_pca_plot(pca_05,  "PC1", "PC3", pval_05_13)  + labs(tag = "L")
+
+# ============================================================
+# Row and column label helpers
+# ============================================================
+make_row_label <- function(label) {
+  ggplot() +
+    annotate("text", x = 0.5, y = 0.5,
+             label = label, angle = 90,
+             size = 5, fontface = "bold") +
+    theme_void()
+}
+
+make_col_label <- function(label) {
+  ggplot() +
+    annotate("text", x = 0.5, y = 0.5,
+             label = label,
+             size = 5, fontface = "bold") +
+    theme_void()
+}
+
+corner <- make_col_label("")
+c1_h   <- make_col_label("PC1 vs PC2")
+c2_h   <- make_col_label("PC2 vs PC3")
+c3_h   <- make_col_label("PC1 vs PC3")
+
+r1_l   <- make_row_label("All genes")
+r2_l   <- make_row_label("Top 50%")
+r3_l   <- make_row_label("Top 25%")
+r4_l   <- make_row_label("Top 5%")
+
+# ============================================================
+# Assemble 5 × 4 grid
+# ============================================================
+design <- "
+ABCD
+EFGH
+IJKL
+MNOP
+QRST
+"
+
+combined_all <- wrap_plots(
+  corner,  c1_h,    c2_h,    c3_h,
+  r1_l,    pAll_12, pAll_23, pAll_13,
+  r2_l,    p50_12,  p50_23,  p50_13,
+  r3_l,    p25_12,  p25_23,  p25_13,
+  r4_l,    p05_12,  p05_23,  p05_13,
+  design  = design,
+  widths  = c(0.06, 1, 1, 1),
+  heights = c(0.06, 1, 1, 1, 1),
+  guides  = "collect"
+)
+
+# ============================================================
+# Save
+# ============================================================
+#ggsave("../Figures/PCA_all_50_25_5_combined.pdf",
+#       combined_all,
+#       width  = 22,
+#       height = 28,
+#       device = cairo_pdf)
+
+ggsave("../Figures/PCA_all_50_25_5_combined_pval.png",
+       combined_all,
+       width  = 22,
+       height = 28,
+       dpi    = 300)
 ```
 
 
 
-
 ```{r}
-### PCA plot using DESeq2 package of ntop 500 genes
+### PCA plot using DESeq2 package of ntop 500 genes - very stringent way (so not ideal explores top ~2.5% of genes)
 ### ntop = 500 is the top 500 genes with the highest variance across samples
 
 PCAdata_500 <- plotPCA(vsd, intgroup=c("clutch_ID", "fish_type2"), ntop=500, returnData=TRUE)
@@ -587,7 +1029,7 @@ Figure 4: Venn diagrams depicting number of shared significantly up-regulated / 
 
 ```{r heatmap of all annotated genes P1 vs P2 vs S}
 ## Load previously saved dds, vsd, and rlog data 
-load("transformed_counts_mindepth10.RData.RData")
+load("transformed_counts_mindepth10.RData")
 
 #the three pairwise contrasts:
 P1_con_P2 <- results(dds, contrast = c("fish_type2", "P2", "P1"), alpha = 0.05)
@@ -647,7 +1089,7 @@ table(complete.cases(rldpvals))
 #write.csv(rldpvals, "../Data/percula_RLDandPVALS.csv", quote=F)
 ```
 
-~~~~~~~~~CODE FROM HERE CHECK~~~~~~~~~~~~~~~~  the 4 sections below should be 1 generating a 
+
 basic heatmap with up and downregulated genes across 3 fish categories (social positions)
 ```{r}
 rldpvals <- read.csv(file="../Data/percula_RLDandPVALS.csv", row.names=1)
@@ -1015,4 +1457,352 @@ library(cowplot)
 combined_vulcano <- plot_grid(P1vsP2, P1vsS, P2vsS, ncol = 3, labels = c("A", "B", "C"),
                               label_size = 16, align = "hv")
 ggsave("combined_vulcano.png", combined_vulcano, width = 9, height = 6, dpi = 300)
+```
+
+
+
+```{r corrected volcano P1 vs P2}
+load("transformed_counts_mindepth10.RData")
+
+# ── Load gene names ───────────────────────────────────────────────────────────
+gene_names <- read.delim("./geneID2geneNAME.tab", header = TRUE, stringsAsFactors = FALSE)
+gene_names$external_gene_name[gene_names$external_gene_name == ""] <- NA
+
+# ── Results ───────────────────────────────────────────────────────────────────
+res_P1vsP2    <- results(dds, contrast = c("fish_type2", "P1", "P2"))  #
+res_df_P1vsP2 <- as.data.frame(res_P1vsP2) %>%                         # 
+  rownames_to_column("ensembl_gene_id") %>%
+  left_join(gene_names, by = "ensembl_gene_id") %>%
+  mutate(
+    external_gene_name = na_if(external_gene_name, ""),
+    gene_label = if_else(is.na(external_gene_name), ensembl_gene_id, external_gene_name)
+  )
+
+# ── Significance: padj only ───────────────────────────────────────────────────
+padj_thresh <- 0.05
+
+res_df_P1vsP2$significance <- "Not Sig"                                
+res_df_P1vsP2$significance[                                            
+  res_df_P1vsP2$padj < padj_thresh & res_df_P1vsP2$log2FoldChange > 0
+] <- "Up in P1"
+res_df_P1vsP2$significance[                                            
+  res_df_P1vsP2$padj < padj_thresh & res_df_P1vsP2$log2FoldChange < 0
+] <- "Up in P2"                                                        
+
+res_df_P1vsP2$significance <- factor(                               
+  res_df_P1vsP2$significance,
+  levels = c("Up in P1", "Up in P2", "Not Sig")                      
+)
+
+custom_colors1 <- c(
+  "Up in P1" = "magenta3",       
+  "Up in P2" = "purple3",
+  "Not Sig" = "black")
+
+# ── Top genes: ranked by padj only ───────────────────────────────────────────
+top_up_P1 <- res_df_P1vsP2 %>%                                         
+  filter(log2FoldChange > 0, padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+top_up_P2 <- res_df_P1vsP2 %>%                                         
+  filter(log2FoldChange < 0, padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+highlight_genes <- bind_rows(top_up_P1, top_up_P2)                    
+write.csv(highlight_genes, "../Data/top10genes_P1vsP2_nofcthresh.csv", row.names = FALSE) 
+
+# ── Calculate y-axis max to set label nudge distance ─────────────────────────
+y_max <- max(-log10(res_df_P1vsP2$padj), na.rm = TRUE)                
+
+# ── Static volcano ────────────────────────────────────────────────────────────
+P1vsP2_static <- ggplot(                                               
+  res_df_P1vsP2,                                                       
+  aes(x = log2FoldChange, y = -log10(padj))
+) +
+  geom_point(aes(color = significance), size = 4, alpha = 0.8) +
+  scale_color_manual(
+    values = custom_colors1,
+    guide  = guide_legend(override.aes = list(size = 3, alpha = 1))
+  ) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey60") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey60") +
+  geom_text_repel(
+    data               = highlight_genes,
+    aes(label          = gene_label),
+    size               = 3,
+    max.overlaps       = Inf,
+    min.segment.length = 0,
+    segment.color      = "black",
+    segment.size       = 0.5,
+    segment.curvature  = 0,
+    segment.angle      = 90,
+    direction          = "both",
+    nudge_y            = y_max * 0.5,
+    vjust              = 0,
+    force              = 4,
+    force_pull         = 0.01,
+    box.padding        = 1,             # ← more space around each label
+    point.padding      = 0.5           # ← more space between label and point
+  ) +
+  labs(
+    x     = expression(log[2]~"Fold Change"),
+    y     = expression(-log[10]~"adj. p-value"),
+    color = ""
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position   = c(0.15, 0.1),
+    legend.background = element_rect(fill = "white", color = NA),
+    legend.text       = element_text(size = 9),
+    panel.grid        = element_blank(),
+    axis.text         = element_text(size = 14),
+    axis.title        = element_text(size = 16),
+    axis.line         = element_line(color = "black", linewidth = 0.5),
+    plot.background   = element_rect(fill = "white", color = NA)
+  )
+
+P1vsP2_static
+```
+
+
+```{r corrected volcano plot P1 vs S}
+load("transformed_counts_mindepth10.RData")
+
+# ── Load gene names ───────────────────────────────────────────────────────────
+gene_names <- read.delim("./geneID2geneNAME.tab", header = TRUE, stringsAsFactors = FALSE)
+gene_names$external_gene_name[gene_names$external_gene_name == ""] <- NA
+
+# ── Results ───────────────────────────────────────────────────────────────────
+res_P1vsS    <- results(dds, contrast = c("fish_type2", "P1", "S"))
+res_df_P1vsS <- as.data.frame(res_P1vsS) %>%
+  rownames_to_column("ensembl_gene_id") %>%
+  left_join(gene_names, by = "ensembl_gene_id") %>%
+  mutate(
+    external_gene_name = na_if(external_gene_name, ""),
+    gene_label = if_else(is.na(external_gene_name), ensembl_gene_id, external_gene_name)
+  )
+
+# ── Significance: padj only ───────────────────────────────────────────────────
+padj_thresh <- 0.05
+
+res_df_P1vsS$significance <- "Not Sig"
+res_df_P1vsS$significance[
+  res_df_P1vsS$padj < padj_thresh & res_df_P1vsS$log2FoldChange > 0
+] <- "Up in P1"
+res_df_P1vsS$significance[
+  res_df_P1vsS$padj < padj_thresh & res_df_P1vsS$log2FoldChange < 0
+] <- "Up in S"
+
+res_df_P1vsS$significance <- factor(
+  res_df_P1vsS$significance,
+  levels = c("Up in P1", "Up in S", "Not Sig")
+)
+
+custom_colors <- c(
+  "Up in P1" = "magenta3",
+  "Up in S"  = "gray40",   # purple to match reference image
+  "Not Sig"  = "black"
+)
+
+
+# ── Top genes: ranked by padj only ───────────────────────────────────────────
+top_up_P1 <- res_df_P1vsS %>%
+  filter(log2FoldChange > 0, padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+top_up_S <- res_df_P1vsS %>%
+  filter(log2FoldChange < 0, padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+highlight_genes <- bind_rows(top_up_P1, top_up_S)
+write.csv(highlight_genes, "../Data/top10genes_P1vsS_nofcthresh.csv", row.names = FALSE)
+
+# ── Calculate y-axis max to set label nudge distance ─────────────────────────
+y_max <- max(-log10(res_df_P1vsS$padj), na.rm = TRUE)
+
+# ── Static volcano ────────────────────────────────────────────────────────────
+P1vsS_static <- ggplot(
+  res_df_P1vsS,
+  aes(x = log2FoldChange, y = -log10(padj))
+) +
+  geom_point(aes(color = significance), size = 4, alpha = 0.8) +
+  scale_color_manual(
+    values = custom_colors,
+    guide  = guide_legend(override.aes = list(size = 3, alpha = 1))  # larger legend dots
+  ) +
+  # ── visual reference lines (not used for DEG classification) ────────────────
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey60") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey60") +
+
+  # ── gene labels: straight vertical lines going up to labels ──────────────────
+  geom_text_repel(
+   data               = highlight_genes,
+    aes(label          = gene_label),
+    size               = 3,
+    max.overlaps       = Inf,
+    min.segment.length = 0,
+    segment.color      = "black",
+    segment.size       = 0.5,
+    segment.curvature  = 0,
+    segment.angle      = 90,
+    direction          = "both",
+    nudge_y            = y_max * 0.5,
+    vjust              = 0,
+    force              = 4,
+    force_pull         = 0.01,
+    box.padding        = 1,             # ← more space around each label
+    point.padding      = 0.5           # ← more space between label and point
+  ) +
+  labs(
+    x     = expression(log[2]~"Fold Change"),
+    y     = expression(-log[10]~"adj. p-value"),
+    color = ""
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position   = c(0.15, 0.1),   # ← bottom left like reference
+    legend.background = element_rect(fill = "white", color = NA),
+    legend.text       = element_text(size = 9),
+    panel.grid        = element_blank(),
+    axis.text         = element_text(size = 14),
+    axis.title        = element_text(size = 16),
+    axis.line         = element_line(color = "black", linewidth = 0.5),
+    plot.background   = element_rect(fill = "white", color = NA)
+  )
+
+P1vsS_static
+```
+
+
+```{r corrected volcano P2 vs S}
+load("transformed_counts_mindepth10.RData")
+
+# ── Load gene names ───────────────────────────────────────────────────────────
+gene_names <- read.delim("./geneID2geneNAME.tab", header = TRUE, stringsAsFactors = FALSE)
+gene_names$external_gene_name[gene_names$external_gene_name == ""] <- NA
+
+# ── Results ───────────────────────────────────────────────────────────────────
+res_P2vsS    <- results(dds, contrast = c("fish_type2", "P2", "S"))    
+res_df_P2vsS <- as.data.frame(res_P2vsS) %>%                           
+  rownames_to_column("ensembl_gene_id") %>%
+  left_join(gene_names, by = "ensembl_gene_id") %>%
+  mutate(
+    external_gene_name = na_if(external_gene_name, ""),
+    gene_label = if_else(is.na(external_gene_name), ensembl_gene_id, external_gene_name)
+  )
+
+# ── Significance: padj only ───────────────────────────────────────────────────
+padj_thresh <- 0.05
+
+res_df_P2vsS$significance <- "Not Sig"                                 
+res_df_P2vsS$significance[                                             
+  res_df_P2vsS$padj < padj_thresh & res_df_P2vsS$log2FoldChange > 0
+] <- "Up in P2"                                                        
+res_df_P2vsS$significance[                                             
+  res_df_P2vsS$padj < padj_thresh & res_df_P2vsS$log2FoldChange < 0
+] <- "Up in S"                                                         
+
+res_df_P2vsS$significance <- factor(                                   
+  res_df_P2vsS$significance,
+  levels = c("Up in P2", "Up in S", "Not Sig")                        
+)
+
+custom_colors2 <- c(                                                   
+  "Up in P2" = "purple3",                                              
+  "Up in S"  = "gray40",                                               
+  "Not Sig"  = "black"
+)
+
+# ── Top genes: ranked by padj only ───────────────────────────────────────────
+top_up_P2 <- res_df_P2vsS %>%                                          
+  filter(log2FoldChange > 0, padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+top_up_S <- res_df_P2vsS %>%                                          
+  filter(log2FoldChange < 0, padj < padj_thresh) %>%
+  arrange(padj) %>%
+  slice_head(n = 10)
+
+highlight_genes <- bind_rows(top_up_P2, top_up_S)                     
+write.csv(highlight_genes, "../Data/top10genes_P2vsS_nofcthresh.csv", row.names = FALSE)  
+
+# ── Calculate y-axis max to set label nudge distance ─────────────────────────
+y_max <- max(-log10(res_df_P2vsS$padj), na.rm = TRUE)                  
+
+# ── Static volcano ────────────────────────────────────────────────────────────
+P2vsS_static <- ggplot(                                               
+  res_df_P2vsS,                                                        
+  aes(x = log2FoldChange, y = -log10(padj))
+) +
+  geom_point(aes(color = significance), size = 4, alpha = 0.8) +
+  scale_color_manual(
+    values = custom_colors2,                                           
+    guide  = guide_legend(override.aes = list(size = 3, alpha = 1))
+  ) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey60") +
+  geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey60") +
+  geom_text_repel(
+    data               = highlight_genes,
+    aes(label          = gene_label),
+    size               = 3.5,
+    max.overlaps       = Inf,
+    min.segment.length = 0,
+    segment.color      = "black",
+    segment.size       = 0.5,
+    segment.curvature  = 0,
+    segment.angle      = 90,
+    direction          = "x",
+    nudge_y            = y_max * 0.3,
+    vjust              = 0,
+    force              = 3,
+    force_pull         = 0.03
+  ) +
+  labs(
+    x     = expression(log[2]~"Fold Change"),
+    y     = expression(-log[10]~"adj. p-value"),
+    color = ""
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position   = c(0.25, 0.8),
+    legend.background = element_rect(fill = "white", color = NA),
+    legend.text       = element_text(size = 9),
+    panel.grid        = element_blank(),
+    axis.text         = element_text(size = 14),
+    axis.title        = element_text(size = 16),
+    axis.line         = element_line(color = "black", linewidth = 0.5),
+    plot.background   = element_rect(fill = "white", color = NA)
+  )
+
+P2vsS_static                                                           
+```
+
+
+
+```{r corrected vulcano combined}
+library(cowplot)
+combined_vulcano <- plot_grid(P1vsP2_static, P1vsS_static, ncol = 2, labels = c("A", "B"),
+                              label_size = 16, align = "hv")
+ggsave("../Figures/combined_vulcano_top10named_2only20260407.png", combined_vulcano, width = 10, height = 7, dpi = 1200)
+ggsave("../Figures/combined_vulcano_top10named_2only20260407.pdf", combined_vulcano, width = 10, height = 7, dpi = 1200)
+
+p2vss<- plot_grid(P2vsS_static, ncol = 1, labels = c("C"),
+                              label_size = 16, align = "hv")
+#save P2vsS separately and add as a small insert
+ggsave("../Figures/P2vsS_20260407.png", p2vss, width = 3, height = 5, dpi = 1200)
+
+
+
+# Create inset plot positioned inside P1vsS
+inset_plot <- ggdraw(P1vsS_static) +
+  draw_plot(P1vsS_static, x = 0.8, y = 0.7, width = 0.3, height = 0.3) +  # adjust position/size
+  draw_plot_label(label = "C", x = 0.8, y = 0.95, size = 14)        # label for the inset
+
+# Combine with P1vsP2
+combined_vulcano_insert <- plot_grid(P1vsP2, inset_plot, labels = c("A", "B"), label_size = 16)
 ```

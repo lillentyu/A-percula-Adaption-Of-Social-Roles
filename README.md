@@ -7,7 +7,7 @@ This repository contains all code, data files, figures, and supplementary genoty
 
 - `Code/` – R scripts for all analyses and figure generation  
 - `Data/` – Processed data files used in analyses  
-- `Figures/` – Final and intermediate figures  
+- `Manuscript_Figures/` – Final figures of main text and supplementary materials
 - `Genotyping/` – Genotyping files and related metadata  
 
 ## Raw Data

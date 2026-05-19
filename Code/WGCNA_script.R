@@ -536,6 +536,8 @@ library(cowplot)
 combined_plot <- plot_grid(brown, blue, red, black, ncol = 4, align = "h", rel_widths = c(1, 1))
 combined_plot
 ggsave(file = "../Figures/WGCNA_modules_boxplots.pdf", height = 5, width = 12, units = "in", dpi = 1200)
+ggsave(file = "../Figures/WGCNA_modules_boxplots.png", height = 5, width = 9, units = "in", dpi = 1200)
+ggsave(file = "../Figures/WGCNA_modules_boxplots.svg", height = 5, width = 12, units = "in", dpi = 1200)
 
 #knowing the identified modules of interest, I will proceed to run GO-MWU analysis on them
 #to do this I`ll extract module information for GO-MWU
@@ -959,8 +961,8 @@ for (file in dataFiles) {
 ########## manuscript heatmap for brown module growth and development GO terms ##########
 ########################################################################################
 
-brown_original_BP <- read.csv("./pulledGOterms/brown_BP_growthdevelopment_anno.csv", header = T) 
-brown_original_MF <- read.csv("./pulledGOterms/brown_MF_growth_anno.csv", header = T) 
+brown_original_BP <- read.csv("./GO_MWU/pulledGOterms/brown_BP_growthdevelopment_anno.csv", header = T) 
+brown_original_MF <- read.csv("./GO_MWU/pulledGOterms/brown_MF_growth_anno.csv", header = T) 
 colnames(brown_original_BP) <- gsub("^X", "", colnames(brown_original_BP))
 colnames(brown_original_MF) <- gsub("^X", "", colnames(brown_original_MF))
 
@@ -1076,10 +1078,10 @@ ht_map_growth <- ComplexHeatmap::pheatmap(as.matrix(merged_data[ , 1:(ncol(merge
 draw(ht_map_growth, merge_legend = TRUE)
 
 
-
+########
 ## reading in the 2 brown module heatmap matrixes and plotting them together
-brown_BP_growthdev <- read.csv("./pulledGOterms/brown_BP_growthdevelopment_annocsv_sig_heatmap_matrix.csv", header = TRUE)
-brown_MF_growth <- read.csv("./pulledGOterms/brown_MF_growth_annocsv_sig_heatmap_matrix.csv", header = TRUE)
+brown_BP_growthdev <- read.csv("./GO_MWU/pulledGOterms/brown_BP_growthdevelopment_annocsv_sig_heatmap_matrix.csv", header = TRUE)
+brown_MF_growth <- read.csv("./GO_MWU/pulledGOterms/brown_MF_growth_annocsv_sig_heatmap_matrix.csv", header = TRUE)
 head(brown_BP_growthdev)
 
 #make gene names row names 
@@ -1104,15 +1106,24 @@ merged_brown_growth <-  rbind(brown_BP_growthdev, brown_MF_growth)
 #remove duplicate rows
 merged_brown_growth <- merged_brown_growth[!duplicated(merged_brown_growth), ]
 
+# make lowercase  <-- ADD HERE
+rownames(merged_brown_growth) <- tolower(rownames(merged_brown_growth))
+
 #make this a matrix
 merged_brown_growth <- as.matrix(merged_brown_growth)
 
 ### Getting size-ratio data - no need for size ratio data in this heatmap
-#growth_data <- read.csv("../Data/Vizer_StrategicGrowth_phenotypicdata_SNPcorrected_20230906.csv", header = T)
-#size_ratio <-  growth_data[, c("replicate_ID", "fish_type2", "final_size_ratio")]
-#size_ratio
-#size_ratio$sampleID <- paste(size_ratio$replicate_ID, size_ratio$fish_type2, sep = "")
-#rownames(size_ratio) <- size_ratio$sampleID
+growth_data <- read.csv("../Data/Vizer_StrategicGrowth_phenotypicdata_SNPcorrected_20230906.csv", header = T)
+size_ratio <-  growth_data[, c("replicate_ID", "fish_type2", "final_size_ratio")]
+size_ratio
+size_ratio$sampleID <- paste(size_ratio$replicate_ID, size_ratio$fish_type2, sep = "")
+rownames(size_ratio) <- size_ratio$sampleID
+
+# NEW: sort size_ratio to match heatmap column order
+heatmap_colnames  <- colnames(merged_brown_growth)                              # NEW
+sorted_size_ratio <- size_ratio[heatmap_colnames, "final_size_ratio", drop = FALSE]  # NEW
+
+
 annotation_col <- data.frame(social_position = c(rep("S", 15), rep("P1", 15), rep("P2", 15)),
                              clutch_ID = c("L6" ,"L2" ,"L3", "L6", "L2", "L3", "L2", "L2", "L2", "L6", "L3", "L3" ,"L3", "L6", 
                                            "L3", "L3", "L6", "L2", "L2", "L3", "L6", "L6", "L6", "L3", "L3", "L6", "L2", "L6", 
@@ -1123,51 +1134,579 @@ ann_colors <- list(social_position =  c(P1= "magenta3", P2 ="purple3", S="grey50
                    clutch_ID = c(L2 = "brown", L3 = "brown1", L6="burlywood1"))
 col0 <- colorRampPalette(rev(c("chocolate1", "#FEE090", "grey10", "cyan3", "cyan")))(100)
 
+# CHANGED: added annotation_label to rename legend titles
 ha <- HeatmapAnnotation(
-  social_position = annotation_col$social_position,
-  clutch_ID = annotation_col$clutch_ID,
-  col = ann_colors,
-  annotation_name_gp = gpar(fontface = "bold"))
+  social_position    = annotation_col$social_position,
+  clutch_ID          = annotation_col$clutch_ID,
+  col                = ann_colors,
+  annotation_name_gp = gpar(fontface = "bold"),
+  annotation_label   = c(social_position = "social position",   # NEW
+                         clutch_ID       = "clutch ID"),
+  annotation_legend_param = list(
+    social_position = list(title_gp = gpar(fontface = "bold", fontsize = 14),    #adjust legend font size here
+                           labels_gp = gpar(fontsize= 13)),
+    clutch_ID       = list(title_gp = gpar(fontface = "bold", fontsize = 14),
+                           labels_gp = gpar(fontsize= 13))))
   
-# Define custom colors based on the final_size_ratio values
-#custom_colors <- ifelse(sorted_size_ratio$final_size_ratio < 0.8, "black", "red")
+# CHANGED: <= so exactly 0.8 is black (was < 0.8)
+custom_colors <- ifelse(sorted_size_ratio$final_size_ratio < 0.8, "black", "red")
 
-#ha1 <- HeatmapAnnotation(
-#  ratio = anno_barplot(sorted_size_ratio$final_size_ratio, gp = gpar(fill = custom_colors)))
-fontsize <- 13
+# CHANGED: axis on left, label on right, ylim fixed for dashed line (was minimal barplot)
+ha1 <- HeatmapAnnotation(
+  ratio = anno_barplot(
+    sorted_size_ratio$final_size_ratio,
+    gp         = gpar(fill = custom_colors),
+    ylim       = c(0, 1),                    # NEW
+    axis_param = list(side = "left")         # CHANGED: was "right"
+  ),
+  annotation_name_gp   = gpar(fontface = "bold"),
+  show_annotation_name = TRUE,               # 
+  annotation_name_side = "right",             # 
+  annotation_label = "size ratio"
+  )
 
-cell_size <- 14  # in points, since PDF units are in inches * 72
+# NEW: size ratio legend
+lgd_ratio <- Legend(                                                     
+  labels    = c("≤ 0.8", "> 0.8"),                                     
+  title     = "size ratio",                                             
+  legend_gp = gpar(fill = c("black", "red")),     
+  labels_gp = gpar(fontsize = 13),                              # NEW
+  title_gp  = gpar(fontface = "bold", fontsize = 14)                 
+)                                                                       
 
-# Dynamically set PDF width and height
-pdf_width <- ncol(merged_data) * cell_size / 72  # convert to inches
-pdf_height <- nrow(merged_data) * cell_size / 72
+
+fontsize <- 14
+
+# also add padding for top and bottom annotations
+n_cols <- ncol(merged_brown_growth)   # CHANGED
+n_rows <- nrow(merged_brown_growth)   # CHANGED
+
+pdf_width  <- (n_cols * cell_size / 72) + 8   # +8 for legend and row labels
+pdf_height <- (n_rows * cell_size / 72) + 4   # +4 for top and bottom annotations
+
+#pdf("../Figures/Heatmap_BrownModule_GrowthDevelopment20260402.1.pdf", width = pdf_width, height = pdf_height)
+svglite("../Figures/Heatmap_BrownModule_GrowthDevelopment_wratio_20260417.1.svg", #editable svg file
+        width  = pdf_width,
+        height = pdf_height)
 
 ht <- ComplexHeatmap::pheatmap(merged_brown_growth, 
-                          name="matrix",
-                          cluster_cols= TRUE,
-                          cluster_rows = TRUE,
-                          scale="row", 
-                          color=col0,
-                          top_annotation = ha,
-                          #bottom_annotation = ha1,
-                          #annotation_col = annotation_col,
-                          #annotation_colors = ann_colors,
-                          column_split = annotation_col$social_position, 
-                          #column_reorder = list(annotation_col$clutch_ID),
-                          #show_rownames= TRUE, 
-                          row_labels = rownames(merged_brown_growth),
-                          show_colnames=T, 
-                          border_color="NA", 
-                          annotation_names_col=F,
-                          cellwidth = cell_size,
-                          cellheight = cell_size,
-                          fontsize = fontsize,
-                          fontsize_row = fontsize,
-                          fontsize_col = fontsize)
-  
-# draw heatmap, merge legends, and increase font size for legends
+                               name            = "z-score",
+                               cluster_cols    = TRUE,
+                               cluster_rows    = TRUE,
+                               scale           = "row", 
+                               color           = col0,
+                               top_annotation  = ha,
+                               bottom_annotation = ha1,         
+                               column_split    = annotation_col$social_position, 
+                               row_labels      = rownames(merged_brown_growth),
+                               show_colnames   = TRUE, 
+                               border_color    = "NA", 
+                               annotation_names_col = FALSE,
+                               cellwidth       = cell_size,
+                               cellheight      = cell_size,
+                               fontsize        = fontsize,
+                               fontsize_row    = fontsize,
+                               fontsize_col    = fontsize,
+                               heatmap_legend_param = list(
+                                 labels_gp = gpar(fontsize = 13),
+                                 title_gp  = gpar(fontface = "bold", fontsize = 14)))
+
+# CHANGED: draw now includes size ratio legend
 draw(ht,
-     merge_legend = TRUE)
+     merge_legend           = TRUE,
+     annotation_legend_list = list(lgd_ratio))              # 
+
+# NEW: dashed line at 0.8 across all 3 column split slices
+for (i in 1:3) {                                            # NEW
+  decorate_annotation("ratio", slice = i, {                 # NEW
+    grid.lines(                                             # NEW
+      x  = unit(c(0, 1), "npc"),                           # NEW
+      y  = unit(c(0.8, 0.8), "native"),                    # NEW
+      gp = gpar(col = "black", lty = "dashed", lwd = 1.5)  # NEW
+    )                                                       # NEW
+  })                                                        # NEW
+}                                                           # NEW
+
+dev.off()
+
+#heatmap of growth modules 
+#####
+brown_BP_growthdev <- read.csv("./GO_MWU/pulledGOterms/brown_BP_growthdevelopment_annocsv_sig_heatmap_matrix.csv", header = TRUE)
+brown_MF_growth <- read.csv("./GO_MWU/pulledGOterms/brown_MF_growth_annocsv_sig_heatmap_matrix.csv", header = TRUE)
+head(brown_BP_growthdev)
+
+#make gene names row names 
+rownames(brown_BP_growthdev) <- brown_BP_growthdev$X
+#delete that first column then
+brown_BP_growthdev <- brown_BP_growthdev %>% 
+  select(-X)
+
+rownames(brown_MF_growth) <- brown_MF_growth$X
+#delete that first column then
+brown_MF_growth <- brown_MF_growth %>% 
+  select(-X)
+
+colnames(brown_BP_growthdev) <- gsub("^X", "", colnames(brown_BP_growthdev))
+colnames(brown_MF_growth) <- gsub("^X", "", colnames(brown_MF_growth))
+head(brown_BP_growthdev)
+head(brown_MF_growth)
+
+#merge these 2 datasets
+merged_brown_growth <-  rbind(brown_BP_growthdev, brown_MF_growth)
+
+#remove duplicate rows
+merged_brown_growth <- merged_brown_growth[!duplicated(merged_brown_growth), ]
+
+# make lowercase  <-- ADD HERE
+rownames(merged_brown_growth) <- tolower(rownames(merged_brown_growth))
+
+#make this a matrix
+merged_brown_growth <- as.matrix(merged_brown_growth)
+
+# ### Getting size-ratio data - no need for size ratio data in this heatmap
+# growth_data <- read.csv("../Data/Vizer_StrategicGrowth_phenotypicdata_SNPcorrected_20230906.csv", header = T)
+# size_ratio <-  growth_data[, c("replicate_ID", "fish_type2", "final_size_ratio")]
+# size_ratio
+# size_ratio$sampleID <- paste(size_ratio$replicate_ID, size_ratio$fish_type2, sep = "")
+# rownames(size_ratio) <- size_ratio$sampleID
+# 
+# # NEW: sort size_ratio to match heatmap column order
+# heatmap_colnames  <- colnames(merged_brown_growth)                              # NEW
+# sorted_size_ratio <- size_ratio[heatmap_colnames, "final_size_ratio", drop = FALSE]  # NEW
+# 
+
+annotation_col <- data.frame(social_position = c(rep("S", 15), rep("P1", 15), rep("P2", 15)),
+                             clutch_ID = c("L6" ,"L2" ,"L3", "L6", "L2", "L3", "L2", "L2", "L2", "L6", "L3", "L3" ,"L3", "L6", 
+                                           "L3", "L3", "L6", "L2", "L2", "L3", "L6", "L6", "L6", "L3", "L3", "L6", "L2", "L6", 
+                                           "L3", "L6", "L2", "L3", "L6", "L3","L6", "L2", "L3", "L3", "L6", "L2", "L2", "L6", 
+                                           "L2", "L2", "L2"))
+
+ann_colors <- list(social_position =  c(P1= "magenta3", P2 ="purple3", S="grey50"),
+                   clutch_ID = c(L2 = "brown", L3 = "brown1", L6="burlywood1"))
+col0 <- colorRampPalette(rev(c("chocolate1", "#FEE090", "grey10", "cyan3", "cyan")))(100)
+
+# CHANGED: added annotation_label to rename legend titles
+ha <- HeatmapAnnotation(
+  social_position    = annotation_col$social_position,
+  clutch_ID          = annotation_col$clutch_ID,
+  col                = ann_colors,
+  annotation_name_gp = gpar(fontface = "bold"),
+  annotation_label   = c(social_position = "social position",   # NEW
+                         clutch_ID       = "clutch ID"),
+  annotation_legend_param = list(
+    social_position = list(title_gp = gpar(fontface = "bold", fontsize = 14),    #adjust legend font size here
+                           labels_gp = gpar(fontsize= 13)),
+    clutch_ID       = list(title_gp = gpar(fontface = "bold", fontsize = 14),
+                           labels_gp = gpar(fontsize= 13))))
+
+# # CHANGED: <= so exactly 0.8 is black (was < 0.8)
+# custom_colors <- ifelse(sorted_size_ratio$final_size_ratio < 0.8, "black", "red")
+
+# # CHANGED: axis on left, label on right, ylim fixed for dashed line (was minimal barplot)
+# ha1 <- HeatmapAnnotation(
+#   ratio = anno_barplot(
+#     sorted_size_ratio$final_size_ratio,
+#     gp         = gpar(fill = custom_colors),
+#     ylim       = c(0, 1),                    # NEW
+#     axis_param = list(side = "left")         # CHANGED: was "right"
+#   ),
+#   annotation_name_gp   = gpar(fontface = "bold"),
+#   show_annotation_name = TRUE,               # 
+#   annotation_name_side = "right",             # 
+#   annotation_label = "size ratio"
+# )
+# 
+# # NEW: size ratio legend
+# lgd_ratio <- Legend(                                                     
+#   labels    = c("≤ 0.8", "> 0.8"),                                     
+#   title     = "size ratio",                                             
+#   legend_gp = gpar(fill = c("black", "red")),     
+#   labels_gp = gpar(fontsize = 13),                              # NEW
+#   title_gp  = gpar(fontface = "bold", fontsize = 14)                 
+# )                                                                       
+
+
+fontsize <- 14
+
+# also add padding for top and bottom annotations
+n_cols <- ncol(merged_brown_growth)   # CHANGED
+n_rows <- nrow(merged_brown_growth)   # CHANGED
+
+pdf_width  <- (n_cols * cell_size / 72) + 8   # +8 for legend and row labels
+pdf_height <- (n_rows * cell_size / 72) + 4   # +4 for top and bottom annotations
+
+#pdf("../Figures/Heatmap_BrownModule_GrowthDevelopment20260402.1.pdf", width = pdf_width, height = pdf_height)
+svglite("../Figures/Heatmap_BrownModule_GrowthDevelopment_20260417.1.svg", #editable svg file
+        width  = pdf_width,
+        height = pdf_height)
+
+ht <- ComplexHeatmap::pheatmap(merged_brown_growth, 
+                               name            = "z-score",
+                               cluster_cols    = TRUE,
+                               cluster_rows    = TRUE,
+                               scale           = "row", 
+                               color           = col0,
+                               top_annotation  = ha,
+                               #bottom_annotation = ha1,         
+                               column_split    = annotation_col$social_position, 
+                               row_labels      = rownames(merged_brown_growth),
+                               show_colnames   = TRUE, 
+                               border_color    = "NA", 
+                               annotation_names_col = FALSE,
+                               cellwidth       = cell_size,
+                               cellheight      = cell_size,
+                               fontsize        = fontsize,
+                               fontsize_row    = fontsize,
+                               fontsize_col    = fontsize,
+                               heatmap_legend_param = list(
+                                 labels_gp = gpar(fontsize = 13),
+                                 title_gp  = gpar(fontface = "bold", fontsize = 14)))
+
+# CHANGED: draw now includes size ratio legend
+draw(ht,
+     merge_legend           = TRUE,
+     #annotation_legend_list = list(lgd_ratio)
+     )              # 
+
+# # NEW: dashed line at 0.8 across all 3 column split slices
+# for (i in 1:3) {                                            # NEW
+#   decorate_annotation("ratio", slice = i, {                 # NEW
+#     grid.lines(                                             # NEW
+#       x  = unit(c(0, 1), "npc"),                           # NEW
+#       y  = unit(c(0.8, 0.8), "native"),                    # NEW
+#       gp = gpar(col = "black", lty = "dashed", lwd = 1.5)  # NEW
+#     )                                                       # NEW
+#   })                                                        # NEW
+# }                                                           # NEW
+
+dev.off()
+
+
+
+
+##### generating a PCA with permanova scores from the above 2 heatmaps 
+#############################################################################
+#_____________________________________________________________________
+# ANALYSIS 1: PCA + PERMANOVA — all 45 samples
+# Do samples cluster by social_position and/or clutch_ID?
+#_____________________________________________________________________
+# Extract the scaled data from your heatmap (same scaling as heatmap: scale="row")
+# Scale by rows (z-score normalization)
+growth_expr_mat <- (as.matrix(merged_data[ , 1:(ncol(merged_data)-7)]))
+scaled_expr <- t(scale(t(growth_expr_mat)))   # z-score per gene across samples
+
+# Metadata for all 45 samples
+metadata_all <- data.frame(
+  sampleID        = colnames(growth_expr_mat),
+  social_position = factor(annotation_col$social_position,
+                           levels = c("P1", "P2", "S")),
+  clutch_ID       = factor(annotation_col$clutch_ID,
+                           levels = c("L2", "L3", "L6")),
+  row.names       = colnames(growth_expr_mat),
+  stringsAsFactors = FALSE
+)
+
+# PCA
+#    center = FALSE: z-score already centers the data
+pca_all <- prcomp(t(scaled_expr), center = FALSE, scale. = FALSE)
+pctVar  <- round(100 * pca_all$sdev^2 / sum(pca_all$sdev^2), 1)
+pca_df  <- cbind(as.data.frame(pca_all$x), metadata_all)
+
+
+# PERMANOVA
+
+dist_all <- dist(t(scaled_expr), method = "euclidean")
+
+set.seed(42)
+adonis_res <- adonis2(
+  dist_all ~ social_position + clutch_ID,
+  data         = metadata_all,
+  permutations = 999,
+  by           = "margin"
+)
+
+print(adonis_res)
+# Permutation test for adonis under reduced model
+# Marginal effects of terms
+# Permutation: free
+# Number of permutations: 999
+# 
+# adonis2(formula = dist_all ~ social_position + clutch_ID, data = metadata_all, permutations = 999, by = "margin")
+# Df SumOfSqs      R2      F Pr(>F)    
+# social_position  2   340.21 0.20347 5.4929  0.001 ***
+#   clutch_ID        2    65.95 0.03944 1.0648  0.328    
+# Residual        40  1238.72 0.74086                  
+# Total           44  1672.00 1.00000                  
+# ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+# Format p-values
+format_p <- function(p, nperm = 999) {
+  min_p <- 1 / (nperm + 1)
+  if (!is.na(p) && p <= min_p) {
+    paste0("< ", formatC(min_p, digits = 3, format = "f"))
+  } else {
+    formatC(p, digits = 3, format = "f")
+  }
+}
+
+pval_label <- paste0(
+  "Social position : p ", format_p(adonis_res["social_position", "Pr(>F)"]), "\n",
+  "Clutch ID       : p = ", format_p(adonis_res["clutch_ID",       "Pr(>F)"])
+)
+
+
+clutch_shapes <- c(L2 = 22, L3 = 21, L6 = 24)         # square, circle, triangle
+social_colors <- c(P1 = "magenta3", P2 = "purple3", S = "grey50")
+
+pca_plot_all_growth <- ggplot(pca_df,
+                       aes(x     = PC1,
+                           y     = PC2,
+                           fill  = social_position,    # point interior
+                           color = social_position,    # point border + ellipse
+                           shape = clutch_ID)) +
+  stat_ellipse(
+    aes(x      = PC1,
+        y      = PC2,
+        colour = social_position),
+    inherit.aes = FALSE,                               # prevents 3 ellipses per group
+    geom        = "polygon",
+    fill        = NA,
+    type        = "t",
+    level       = 0.95,
+    linewidth   = 2,
+    show.legend = FALSE
+  ) +
+  geom_point(size = 4, stroke = 1.5) +
+  # fill + color share same name → merged into one legend block
+  scale_fill_manual(
+    values = social_colors,
+    name   = "social position"
+  ) +
+  scale_color_manual(
+    values = social_colors,
+    name   = "social position"
+  ) +
+  scale_shape_manual(
+    values = clutch_shapes,
+    name   = "clutch ID"
+  ) +
+  xlab(paste0("PC1 (", pctVar[1], "%)")) +
+  ylab(paste0("PC2 (", pctVar[2], "%)")) +
+  # PERMANOVA p-values — bottom right corner
+  annotate(
+    "text",
+    x          = Inf,  y = -Inf,
+    label      = pval_label,
+    hjust      = 1,    vjust = -0.2,
+    size       = 3.5,
+    lineheight = 1.5,
+    fontface   = "plain"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    legend.position  = "right",
+    legend.key       = element_blank(),
+    legend.text      = element_text(size = 10),
+    legend.title     = element_text(size = 11),
+    legend.spacing.y = unit(0.5, "cm"),
+    legend.margin    = margin(0, 0, 0, 0)
+  )
+
+print(pca_plot_all_growth)
+
+ggsave(pca_plot_all_growth, filename = "../Figures/PCA_heatmap_Growth_allsamples_20260410.1.pdf", width = 10, height = 8, dpi = 1200)
+ggsave(pca_plot_all_growth, filename = "../Figures/PCA_heatmap_Growth_allsamples_20260410.1.png", width = 10, height = 8, dpi = 1200)
+
+
+
+# ANALYSIS 2: Does size_ratio_cat explain within-group 
+# gene expression variation in P1 and P2?
+
+library(permute)
+# Row-scale expression matrix (same as heatmap scale = "row")
+scaled_expr <- t(scale(t(growth_expr_mat)))   # z-score per gene across samples
+
+# Build metadata from column names
+
+col_names     <- colnames(growth_expr_mat)
+# Extract pair ID (leading digits) and social position (trailing letters)
+pair_ID       <- gsub("(P1|P2|S)$", "", col_names)      # e.g. "7", "1", "10"
+soc_from_name <- gsub("^[0-9]+",    "", col_names)       # e.g. "S", "P1", "P2"
+
+# Sanity check: column name extraction matches annotation_col
+if (!all(soc_from_name == annotation_col$social_position)) {
+  warning("Social position from column names doesn't match annotation_col — check column order!")
+}
+
+metadata <- data.frame(
+  sampleID        = col_names,
+  social_position = annotation_col$social_position,
+  clutch_ID       = annotation_col$clutch_ID,
+  pair_ID         = pair_ID,
+  size_ratio      = sorted_size_ratio$final_size_ratio,
+  row.names       = col_names,
+  stringsAsFactors = FALSE
+)
+
+# S fish have no meaningful size ratio — set to NA
+metadata$size_ratio[metadata$social_position == "S"] <- NA
+
+
+# Subset to P1 + P2 only (for size_ratio analysis)
+
+idx_paired    <- metadata$social_position %in% c("P1", "P2")
+scaled_paired <- scaled_expr[, idx_paired]
+meta_paired   <- metadata[idx_paired, ]
+
+#_________________________________________________________________________
+# PERMANOVA — P1 + P2 - need to control for pairs not being independent
+#    Restricted permutations: entire pairs permute as units
+#    (P1 and P2 from the same pair stay together → preserves
+#     within-pair structure when testing pair-level size_ratio)
+#_________________________________________________________________________
+dist_paired <- dist(t(scaled_paired), method = "euclidean")
+
+perm_ctrl <- how(
+  nperm  = 999,
+  plots  = Plots(strata = meta_paired$pair_ID, type = "free"),
+  within = Within(type  = "none")   # no shuffling within pairs
+)
+
+set.seed(42)
+adonis_res <- adonis2(
+  dist_paired ~ social_position + clutch_ID + size_ratio,
+  data         = meta_paired,
+  permutations = perm_ctrl,
+  by           = "margin"    # each term tested after accounting for all others
+)
+
+print(adonis_res)
+# Permutation test for adonis under reduced model
+# Marginal effects of terms
+# Plots: meta_paired$pair_ID, plot permutation: free
+# Permutation: none
+# Number of permutations: 999
+# 
+# adonis2(formula = dist_paired ~ social_position + clutch_ID + size_ratio, data = meta_paired, permutations = perm_ctrl, by = "margin")
+# Df SumOfSqs      R2      F Pr(>F)
+# social_position  1   224.34 0.20539 7.2210  0.811
+# clutch_ID        2    34.35 0.03145 0.5528  0.894
+# size_ratio       1    22.53 0.02063 0.7251  0.858
+# Residual        25   776.69 0.71108              
+# Total           29  1092.27 1.00000
+
+# Format p-values (999 permutations → minimum p = 0.001)
+format_p <- function(p, nperm = 999) {
+  min_p <- 1 / (nperm + 1)
+  if (!is.na(p) && p <= min_p) {
+    paste0("< ", formatC(min_p, digits = 3, format = "f"))
+  } else {
+    formatC(p, digits = 3, format = "f")
+  }
+}
+
+p_social <- adonis_res["social_position", "Pr(>F)"]
+p_clutch <- adonis_res["clutch_ID",       "Pr(>F)"]
+p_ratio  <- adonis_res["size_ratio",      "Pr(>F)"]
+
+pval_label <- paste0(
+  "Social position : p = ", format_p(p_social), "\n",
+  "Clutch ID       : p = ", format_p(p_clutch), "\n",
+  "Size ratio      : p = ", format_p(p_ratio)
+)
+
+# PCA — P1 + P2, colored by size_ratio
+
+pca_p    <- prcomp(t(scaled_paired), center = TRUE, scale. = FALSE)
+pctVar_p <- round(100 * pca_p$sdev^2 / sum(pca_p$sdev^2), 1)
+pca_df_p <- cbind(as.data.frame(pca_p$x), meta_paired)
+
+clutch_shapes <- c(L2 = 22, L3 = 21, L6 = 24)        # square, circle, triangle
+social_colors <- c(P1 = "magenta3", P2 = "purple3")   # border color
+
+# Sharp black → red step at exactly 0.8
+# values must be in [0,1], so rescale 0.8 relative to data range
+min_r <- min(pca_df_p$size_ratio, na.rm = TRUE)
+max_r <- max(pca_df_p$size_ratio, na.rm = TRUE)
+bp    <- (0.8 - min_r) / (max_r - min_r)   # position of 0.8 rescaled to [0,1]
+eps   <- 0.001                              # tiny gap to create a hard step
+
+# Ensure factors are ordered for consistent legend
+meta_paired$social_position <- factor(meta_paired$social_position, levels = c("P1", "P2"))
+meta_paired$clutch_ID       <- factor(meta_paired$clutch_ID,       levels = c("L2", "L3", "L6"))
+pca_df_p$social_position    <- factor(pca_df_p$social_position,    levels = c("P1", "P2"))
+pca_df_p$clutch_ID          <- factor(pca_df_p$clutch_ID,          levels = c("L2", "L3", "L6"))
+
+
+pca_plot_p_growth <- ggplot(pca_df_p,
+                     aes(x     = PC1,
+                         y     = PC2,
+                         fill  = size_ratio,     # point interior = size ratio
+                         color = social_position, # point border  = social position
+                         shape = clutch_ID)) +    # shape          = clutch ID
+  stat_ellipse(
+    aes(x      = PC1,
+        y      = PC2,
+        colour = social_position),   # only what you need
+    inherit.aes  = FALSE, 
+    type         = "t",
+    level        = 0.95,
+    alpha        = 0.8,
+    linewidth    = 2,       # 'size' deprecated in ggplot2 >= 3.4.0; use linewidth
+    show.legend  = FALSE
+  ) +
+  geom_point(size = 4, stroke = 1.5) +
+  # Fill: sharp black → red at 0.8, continuous colorbar
+  scale_fill_gradientn(
+    colors = c("black", "black", "red",        "red"),
+    values = c(0,        max(bp - eps, 0),
+               min(bp + eps, 1), 1),
+    limits = c(min_r, max_r),
+    name   = "size ratio\n(P2/P1)",
+    guide  = guide_colorbar(
+      frame.colour = "grey40",
+      ticks.colour = "grey40",
+      barwidth     = 1,
+      barheight    = 7
+    )
+  ) +
+  # Color (border): social position
+  scale_color_manual(
+    values = social_colors,
+    name   = "social position"
+  ) +
+  # Shape: clutch ID (fillable shapes only: 21/22/24)
+  scale_shape_manual(
+    values = clutch_shapes,
+    name   = "clutch ID"
+  ) +
+  xlab(paste0("PC1 (", pctVar_p[1], "%)")) +
+  ylab(paste0("PC2 (", pctVar_p[2], "%)")) +
+  # PERMANOVA p-values → bottom right corner
+  annotate(
+    "text",
+    x          = Inf,  y = -Inf,
+    label      = pval_label,
+    hjust      = 1,    vjust = -0.2, # adjust vertical position to avoid overlap with axes
+    size       = 3.5,
+    lineheight = 1,
+    fontface   = "plain"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    legend.position = "right",
+    legend.text      = element_text(size = 8),
+    legend.title     = element_text(size = 9),
+    legend.spacing.y    = unit(0.01, "cm"),
+    legend.key      = element_blank()   # remove grey box around shapes in legend
+  )
+
+print(pca_plot_p_growth)
+
+ggsave(pca_plot_p_growth, filename = "../Figures/PCA_heatmap_Growth_P1P2_size_ratio_20260410.pdf", width = 10, height = 8, dpi = 1200)
+ggsave(pca_plot_p_growth, filename = "../Figures/PCA_heatmap_Growth_P1P2_size_ratio_20260410.png", width = 10, height = 8, dpi = 1200)
+
 
 ########################################################################################
 ######################## making bubble plots of pulled GO terms ########################
