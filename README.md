@@ -1,5 +1,7 @@
 # Plasticity Associated with Adoption of Social Roles in Clown Anemonefish
 
+[![DOI](https://zenodo.org/badge/1000510336.svg)](https://doi.org/10.5281/zenodo.22817747)
+
 This repository contains all code, data files, figures, and supplementary genotyping materials associated with the manuscript:  
 **Vizer et al., _Plasticity Associated with Adoption of Social Roles in Clown Anemonefish_**.
 
