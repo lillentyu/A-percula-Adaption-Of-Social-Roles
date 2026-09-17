@@ -1,7 +1,7 @@
 # Plasticity Associated with Adoption of Social Roles in Clown Anemonefish
 
 This repository contains all code, data files, figures, and supplementary genotyping materials associated with the manuscript:  
-**Vizer et al., _Plasticity Associated with Adoption of Social Roles in Clown Anemonefish_** (in preparation).
+**Vizer et al., _Plasticity Associated with Adoption of Social Roles in Clown Anemonefish_**.
 
 ## Repository Structure
 
